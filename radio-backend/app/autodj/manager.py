@@ -55,7 +55,7 @@ class AutoDJManager:
         if not self._enabled:
             return None
         attempts = 0
-        max_attempts = 20
+        max_attempts = 5
         while attempts < max_attempts:
             url = self._pick_next_url()
             if url is None:
@@ -68,12 +68,15 @@ class AutoDJManager:
                 return track
             except SkippableError as exc:
                 logger.warning(f"AutoDJ skipping {url!r}: {exc}")
+                time.sleep(2)
                 continue
             except ExtractionError as exc:
                 logger.error(f"AutoDJ extraction error for {url!r}: {exc}")
+                time.sleep(5)
                 continue
             except Exception as exc:
                 logger.error(f"AutoDJ unexpected error for {url!r}: {exc}", exc_info=True)
+                time.sleep(5)
                 continue
         logger.error("AutoDJ exhausted maximum attempts without finding a playable track")
         return None

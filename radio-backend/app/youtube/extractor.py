@@ -72,6 +72,9 @@ class YouTubeExtractor:
             "noplaylist": True,
             "socket_timeout": settings.ytdlp_timeout,
             "source_address": "0.0.0.0",
+            "sleep_interval": 3,
+            "max_sleep_interval": 10,
+            "sleep_requests": 1,
             "http_headers": {
                 "User-Agent": (
                     "Mozilla/5.0 (X11; Linux x86_64) "

@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     ytdlp_max_duration: int = Field(7200, alias="YTDLP_MAX_DURATION")
     ytdlp_timeout: int = Field(30, alias="YTDLP_TIMEOUT")
     youtube_cookies_b64: Optional[str] = Field(None, alias="YOUTUBE_COOKIES_B64")
+    proxy_url: Optional[str] = Field(None, alias="PROXY_URL")
 
     # ── FFmpeg ────────────────────────────────────────────────────────────────
     ffmpeg_reconnect_delay: int = Field(5, alias="FFMPEG_RECONNECT_DELAY")
