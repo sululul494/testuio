@@ -18,10 +18,12 @@ class Settings(BaseSettings):
     icecast_host: str = Field("localhost", alias="ICECAST_HOST")
     icecast_port: int = Field(8000, alias="ICECAST_PORT")
     icecast_user: str = Field("source", alias="ICECAST_USER")
-    icecast_password: str = Field("hackme", alias="ICECAST_PASSWORD")
+    # NOTE: Icecast source clients (FFmpeg) MUST use username "source".
+    # "itachi" is the admin-user for the web panel only, not for streaming.
+    icecast_password: str = Field("joy@2007", alias="ICECAST_PASSWORD")
     icecast_mount: str = Field("/stream", alias="ICECAST_MOUNT")
-    icecast_name: str = Field("My Radio", alias="ICECAST_NAME")
-    icecast_description: str = Field("Internet Radio", alias="ICECAST_DESCRIPTION")
+    icecast_name: str = Field("Itachi Hits Radio", alias="ICECAST_NAME")
+    icecast_description: str = Field("Live internet radio stream", alias="ICECAST_DESCRIPTION")
     icecast_genre: str = Field("Mixed", alias="ICECAST_GENRE")
     icecast_public: bool = Field(False, alias="ICECAST_PUBLIC")
 
@@ -31,7 +33,10 @@ class Settings(BaseSettings):
     audio_channels: int = Field(2, alias="AUDIO_CHANNELS")
 
     # ── AutoDJ ────────────────────────────────────────────────────────────────
-    autodj_playlists: str = Field("", alias="AUTODJ_PLAYLISTS")
+    autodj_playlists: str = Field(
+        "https://www.youtube.com/playlist?list=PLDIoUOhQQPlXzhp-83rECoLaV6BwFtNC4",
+        alias="AUTODJ_PLAYLISTS"
+    )
     autodj_shuffle: bool = Field(True, alias="AUTODJ_SHUFFLE")
     autodj_refresh_interval: int = Field(3600, alias="AUTODJ_REFRESH_INTERVAL")
     autodj_enabled: bool = Field(True, alias="AUTODJ_ENABLED")
