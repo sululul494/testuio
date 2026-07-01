@@ -86,17 +86,28 @@ class FFmpegStreamer:
         cmd = [
             settings.ffmpeg_path,
             "-hide_banner",
-            "-loglevel", "warning",
+            "-loglevel", "info",
         ]
         # Support synthetic FFmpeg sources (e.g. lavfi test tone) for diagnostics
         if audio_url.startswith("lavfi:"):
             cmd.extend(["-f", "lavfi", "-i", audio_url.removeprefix("lavfi:")])
         else:
+            user_agent = (
+                "Mozilla/5.0 (X11; Linux x86_64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            )
             cmd.extend([
                 "-reconnect", "1",
                 "-reconnect_streamed", "1",
                 "-reconnect_delay_max", str(settings.ffmpeg_reconnect_delay),
+                "-reconnect_on_network_error", "1",
+                "-reconnect_on_http_error", "5xx,403",
                 "-timeout", "30000000",
+                "-user_agent", user_agent,
+                "-headers", "Accept-Language: en-US,en;q=0.9\r\nOrigin: https://www.youtube.com\r\nReferer: https://www.youtube.com/\r\n",
+                "-multiple_requests", "1",
+                "-seekable", "0",
                 "-i", audio_url,
             ])
         cmd.extend([
