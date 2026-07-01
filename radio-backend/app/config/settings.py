@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     watchdog_max_silence: int = Field(30, alias="WATCHDOG_MAX_SILENCE")
 
     # ── Logs ──────────────────────────────────────────────────────────────────
-    log_dir: str = Field("/app/logs", alias="LOG_DIR")
+    log_dir: str = Field("/home/runner/workspace/icecast-data/log", alias="LOG_DIR")
     log_max_bytes: int = Field(10 * 1024 * 1024, alias="LOG_MAX_BYTES")
     log_backup_count: int = Field(5, alias="LOG_BACKUP_COUNT")
 

@@ -39,13 +39,13 @@ args = "fuser -k 8099/tcp 2>/dev/null; sleep 1; cd radio-backend && python3 -m u
 name = "Icecast Server"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "docker stop icecast 2>/dev/null; docker rm icecast 2>/dev/null; sleep 1; docker run --name icecast -p 8000:8000 -e ICECAST_SOURCE_PASSWORD='joy@2007' -e ICECAST_ADMIN_PASSWORD='joy@2007' moul/icecast"
-waitForPort = 8000
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "mkdir -p /home/runner/workspace/icecast-data/log /home/runner/workspace/icecast-data/web /home/runner/workspace/icecast-data/admin && ICECAST_BASE=$(dirname $(which icecast))/../share/icecast && cp -r \"$ICECAST_BASE/web\"/* /home/runner/workspace/icecast-data/web/ 2>/dev/null; cp -r \"$ICECAST_BASE/admin\"/* /home/runner/workspace/icecast-data/admin/ 2>/dev/null; fuser -k 8000/tcp 2>/dev/null; sleep 1; icecast -c /home/runner/workspace/radio-backend/icecast-replit.xml"
+waitForPort = 8000
 
 [agent]
 stack = "BEST_EFFORT_FALLBACK"
