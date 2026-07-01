@@ -43,10 +43,10 @@ src = re.sub(r"<admin-password>[^<]*</admin-password>",
 
 # Ensure the public /stream mount is explicitly defined so listeners can hit it
 # even if the source hasn't connected yet, and so source clients know the mount.
-if "<mount>/stream" not in src:
+if "<mount-name>/stream" not in src:
     mount_block = """
     <mount>
-        <mount-point>/stream</mount-point>
+        <mount-name>/stream</mount-name>
         <password>___MOUNT_SOURCE_PASS___</password>
         <max-listeners>1000</max-listeners>
         <burst-size>65536</burst-size>

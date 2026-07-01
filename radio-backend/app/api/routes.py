@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from pathlib import Path
 from typing import Any, Dict
 
 import psutil
@@ -33,6 +34,24 @@ from app.youtube.extractor import ExtractionError, SkippableError, extractor
 
 logger = get_logger("api")
 router = APIRouter()
+
+
+@router.get("/debug/logs")
+async def debug_logs(lines: int = 100) -> dict:
+    """Return tail of local log files for debugging Railway/FFmpeg issues."""
+    log_dir = Path(settings.log_dir)
+    result: dict[str, list[str]] = {}
+    for name in ["ffmpeg.log", "api.log", "player.log", "ytdlp.log", "startup.log", "errors.log"]:
+        path = log_dir / name
+        try:
+            if path.exists():
+                text = path.read_text(encoding="utf-8", errors="replace")
+                result[name] = text.splitlines()[-lines:]
+            else:
+                result[name] = ["(file not found)"]
+        except Exception as exc:
+            result[name] = [f"(error reading: {exc})"]
+    return {"logs": result}
 
 
 @router.post("/play", response_model=PlayResponse)
