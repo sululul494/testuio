@@ -1,0 +1,682 @@
+# Prompt: Build a Production-Ready Icecast Radio Backend (Railway Compatible)
+
+You are a senior backend engineer specializing in Python, FastAPI, Icecast, FFmpeg, yt-dlp, Linux, Docker, Railway deployments, scalable backend systems, and REST API design.
+
+Your task is to build a **production-grade internet radio backend**. This is **NOT** a Discord bot, Telegram bot, or music bot. It is only the backend radio service.
+
+I will build my own bot later using Python's `requests` library to communicate with your REST API.
+
+The backend must be reliable enough to run on Railway 24/7 for months with minimal maintenance.
+
+---
+
+# Primary Goal
+
+Build an always-online internet radio backend that:
+
+- Streams audio to Icecast.
+- Streams music directly from YouTube.
+- Uses yt-dlp only for extracting direct media URLs.
+- Uses FFmpeg for transcoding and streaming.
+- Never downloads audio files.
+- Uses a REST API for all controls.
+- Automatically reconnects after failures.
+- Never crashes because of one failed song.
+- Automatically falls back to AutoDJ.
+- Is optimized for Railway deployment.
+
+---
+
+# Technology Stack
+
+Use only:
+
+- Python 3.12
+- FastAPI
+- Uvicorn
+- yt-dlp
+- FFmpeg
+- Requests
+- asyncio
+- Pydantic
+- Thread-safe queues
+- Docker
+- Logging
+
+Do NOT use:
+
+- Flask
+- Django
+- Node.js
+- Java
+- Go
+- Rust
+
+---
+
+# Deployment Target
+
+The primary deployment platform is Railway.
+
+Generate everything required for deployment:
+
+- Dockerfile
+- docker-compose.yml
+- railway.json
+- Procfile
+- requirements.txt
+- .env.example
+- start.sh
+- README.md
+
+The project must run on Railway without code modifications.
+
+---
+
+# Project Structure
+
+Use clean architecture.
+
+Example:
+
+app/
+
+    api/
+
+    player/
+
+    queue/
+
+    autodj/
+
+    youtube/
+
+    ffmpeg/
+
+    icecast/
+
+    config/
+
+    logger/
+
+    models/
+
+    services/
+
+    utils/
+
+main.py
+
+No giant files.
+
+Every module should have one responsibility.
+
+---
+
+# Icecast
+
+Support configuration through environment variables.
+
+Required:
+
+ICECAST_HOST
+
+ICECAST_PORT
+
+ICECAST_USER
+
+ICECAST_PASSWORD
+
+ICECAST_MOUNT
+
+ICECAST_NAME
+
+ICECAST_DESCRIPTION
+
+ICECAST_GENRE
+
+ICECAST_PUBLIC
+
+The source connection must automatically reconnect forever.
+
+Never terminate because Icecast disconnects.
+
+---
+
+# Streaming Pipeline
+
+Strict pipeline:
+
+YouTube
+
+↓
+
+yt-dlp extracts direct media URL
+
+↓
+
+FFmpeg reads directly from the media URL
+
+↓
+
+Icecast
+
+Requirements:
+
+- Never download media
+- Never cache media
+- Never save temporary files
+- Never convert to local MP3
+- Never write audio to disk
+
+Everything must stream directly in memory using pipes.
+
+---
+
+# Audio Settings
+
+Encoder:
+
+libmp3lame
+
+Bitrate:
+
+128 kbps
+
+Sample Rate:
+
+44100 Hz
+
+Channels:
+
+Stereo
+
+Optimize for:
+
+- Stable bitrate
+- Low latency
+- Compatibility
+- Continuous streaming
+
+---
+
+# Queue System
+
+Support only:
+
+- Add song
+- Skip
+- Remove song
+- Clear queue
+- Queue list
+- Now Playing
+
+Do NOT implement:
+
+- Pause
+- Resume
+- Loop
+- Previous
+- Seek
+
+Use a thread-safe FIFO queue.
+
+Queue must survive API requests safely.
+
+---
+
+# Playback Logic
+
+The radio always operates in two modes.
+
+Priority 1:
+
+User Queue
+
+Priority 2:
+
+AutoDJ
+
+Behavior:
+
+If users add songs:
+
+Play them after the current song.
+
+When queue becomes empty:
+
+Automatically return to AutoDJ.
+
+The radio should never become silent.
+
+---
+
+# AutoDJ
+
+AutoDJ must use one or more configurable YouTube playlists.
+
+Example:
+
+AUTODJ_PLAYLISTS=https://youtube.com/playlist?list=...
+
+Support multiple playlists.
+
+Support playlist shuffling.
+
+Support periodic playlist refresh.
+
+Automatically skip unavailable videos.
+
+Loop AutoDJ forever.
+
+Never stop playback.
+
+---
+
+# YouTube Support
+
+Support:
+
+- Videos
+- Shorts
+- Music
+- Search queries
+
+Optional:
+
+- Playlist expansion
+
+Use the latest yt-dlp best practices.
+
+---
+
+# Authentication
+
+The backend should work without requiring me to manually export browser cookies.
+
+Do NOT require:
+
+- cookies.txt
+- browser cookie export
+- OAuth login
+
+The backend should maximize compatibility using current yt-dlp capabilities.
+
+If a video requires authentication (private, age-restricted, members-only, etc.), detect it, skip it automatically, log the reason, and continue playback without interrupting the stream.
+
+Do not attempt to bypass YouTube access controls.
+
+---
+
+# REST API
+
+Create:
+
+POST /play
+
+POST /skip
+
+POST /remove
+
+POST /clear
+
+GET /queue
+
+GET /nowplaying
+
+GET /status
+
+GET /health
+
+GET /stats
+
+---
+
+# Play Endpoint
+
+Accept either:
+
+{
+    "query":"despacito"
+}
+
+or
+
+{
+    "url":"https://youtube.com/..."
+}
+
+Automatically detect which was provided.
+
+---
+
+# Queue Response
+
+Return:
+
+{
+    "position":1,
+    "title":"",
+    "duration":"",
+    "url":"",
+    "thumbnail":"",
+    "requested_by":"API"
+}
+
+---
+
+# Now Playing
+
+Return:
+
+- title
+- channel
+- duration
+- elapsed
+- remaining
+- thumbnail
+- source URL
+- autoplay status
+- queue position
+
+---
+
+# Status Endpoint
+
+Return:
+
+playing
+
+connected_to_icecast
+
+queue_length
+
+listeners
+
+uptime
+
+cpu_usage
+
+memory_usage
+
+bitrate
+
+autodj_enabled
+
+current_source
+
+---
+
+# Health Endpoint
+
+Return HTTP 200 only when:
+
+- Icecast connected
+- FFmpeg alive
+- Queue alive
+- Player alive
+- API alive
+- No deadlocks
+
+Otherwise return an appropriate HTTP error.
+
+---
+
+# Error Handling
+
+Handle:
+
+- Invalid URLs
+- Deleted videos
+- Region blocked videos
+- Age restricted videos
+- Private videos
+- Members-only videos
+- Live streams
+- yt-dlp failures
+- FFmpeg crashes
+- Icecast disconnects
+- HTTP timeouts
+- SSL errors
+- Network failures
+- Unicode errors
+- Rate limiting
+- Empty queue
+
+If one song fails:
+
+Skip automatically.
+
+Continue playback.
+
+Never stop the radio.
+
+---
+
+# Recovery System
+
+Implement watchdogs.
+
+Monitor:
+
+- FFmpeg
+- Icecast
+- Queue
+- Player
+- AutoDJ
+
+Automatically restart failed components.
+
+---
+
+# Logging
+
+Create rotating log files.
+
+Separate:
+
+player.log
+
+api.log
+
+errors.log
+
+ffmpeg.log
+
+ytdlp.log
+
+startup.log
+
+Every failure should include a useful stack trace.
+
+---
+
+# Configuration
+
+Everything must be configurable through .env.
+
+No hardcoded values.
+
+---
+
+# Performance
+
+Use:
+
+requests.Session()
+
+Persistent HTTP connections
+
+Connection pooling
+
+Retry adapters
+
+Reasonable timeouts
+
+Avoid unnecessary CPU usage.
+
+Avoid memory leaks.
+
+---
+
+# Startup Verification
+
+Before the server starts, verify:
+
+✓ Python version
+
+✓ FFmpeg installed
+
+✓ yt-dlp installed
+
+✓ Icecast reachable
+
+✓ Environment variables present
+
+✓ Required directories exist
+
+✓ Write permissions
+
+✓ Docker environment
+
+✓ Railway environment
+
+✓ Internet connectivity
+
+Abort startup with detailed logs if verification fails.
+
+---
+
+# API Documentation
+
+Generate:
+
+API_DOCUMENTATION.md
+
+Include:
+
+- Every endpoint
+- Request body
+- Response body
+- HTTP status codes
+- Error responses
+- Example requests
+- Example responses
+
+Include Python Requests examples.
+
+Example:
+
+requests.post(
+    "/play",
+    json={
+        "query":"despacito"
+    }
+)
+
+Also document:
+
+- Skip
+- Remove
+- Queue
+- Now Playing
+- Status
+- Health
+- Stats
+
+---
+
+# Verification Checklist
+
+Before considering the project complete, verify:
+
+✓ Railway compatible
+
+✓ Docker compatible
+
+✓ Linux compatible
+
+✓ FastAPI verified
+
+✓ yt-dlp verified
+
+✓ FFmpeg verified
+
+✓ Icecast verified
+
+✓ No syntax errors
+
+✓ No circular imports
+
+✓ Thread safety verified
+
+✓ Queue verified
+
+✓ AutoDJ verified
+
+✓ REST API verified
+
+✓ Error recovery verified
+
+✓ Automatic reconnection verified
+
+✓ Logging verified
+
+✓ Health endpoint verified
+
+✓ Startup verification verified
+
+✓ No orphan FFmpeg processes
+
+✓ No zombie subprocesses
+
+✓ Graceful shutdown
+
+✓ Graceful restart
+
+✓ Automatic cleanup of failed streams
+
+✓ Continuous playback verified
+
+---
+
+# Code Quality
+
+Requirements:
+
+- Python type hints
+- PEP 8
+- SOLID principles
+- Clean Architecture
+- Production-ready code
+- Proper exception handling
+- No placeholder code
+- No TODO comments
+- No pseudo-code
+- No incomplete functions
+
+Everything must be fully implemented.
+
+---
+
+# Final Deliverables
+
+Generate:
+
+- Complete source code
+- Dockerfile
+- docker-compose.yml
+- railway.json
+- Procfile
+- requirements.txt
+- .env.example
+- README.md
+- API_DOCUMENTATION.md
+- Complete project tree
+- Railway deployment guide
+- Local development guide
+- Troubleshooting guide
+- Verification report
+- Complete API examples using Python `requests`
+
+The final backend must be resilient, fault-tolerant, modular, continuously streaming, require zero media downloads, automatically recover from failures, automatically switch between the user queue and AutoDJ playlist, and be capable of running on Railway for months without manual intervention.
