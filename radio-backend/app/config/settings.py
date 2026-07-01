@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from typing import List, Optional
+from urllib.parse import quote
 from pydantic_settings import BaseSettings
 from pydantic import Field, field_validator
 
@@ -66,8 +67,12 @@ class Settings(BaseSettings):
 
     @property
     def icecast_url(self) -> str:
+        # URL-encode user and password so special chars (e.g. @ in joy@2007)
+        # don't break FFmpeg's URL parser.
+        user = quote(self.icecast_user, safe="")
+        pwd = quote(self.icecast_password, safe="")
         return (
-            f"icecast://{self.icecast_user}:{self.icecast_password}"
+            f"icecast://{user}:{pwd}"
             f"@{self.icecast_host}:{self.icecast_port}{self.icecast_mount}"
         )
 
