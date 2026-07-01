@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import signal
 import sys
+import threading
 import time
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
@@ -38,7 +39,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.critical(f"Startup verification failed: {exc}")
         sys.exit(1)
 
-    icecast_connector.check_connection()
+    threading.Thread(target=icecast_connector.check_connection, daemon=True).start()
     autodj_manager.start()
     player.start()
     watchdog.start()

@@ -27,14 +27,17 @@ class AutoDJManager:
         if not self._enabled:
             logger.info("AutoDJ is disabled")
             return
-        logger.info("AutoDJ starting — loading playlists")
-        self._refresh_playlists()
+        logger.info("AutoDJ starting — playlist load deferred to background")
         self._refresh_thread = threading.Thread(
-            target=self._refresh_loop,
+            target=self._startup_and_loop,
             daemon=True,
             name="autodj-refresh",
         )
         self._refresh_thread.start()
+
+    def _startup_and_loop(self) -> None:
+        self._refresh_playlists()
+        self._refresh_loop()
 
     def stop(self) -> None:
         self._stop_event.set()

@@ -60,7 +60,14 @@ def verify_ytdlp() -> None:
 
 
 def verify_env_vars() -> None:
-    missing = [v for v in REQUIRED_ENV_VARS if not os.environ.get(v)]
+    checks = {
+        "ICECAST_HOST": settings.icecast_host,
+        "ICECAST_PORT": str(settings.icecast_port),
+        "ICECAST_USER": settings.icecast_user,
+        "ICECAST_PASSWORD": settings.icecast_password,
+        "ICECAST_MOUNT": settings.icecast_mount,
+    }
+    missing = [k for k, v in checks.items() if not v]
     if missing:
         raise RuntimeError(
             f"Missing required environment variables: {', '.join(missing)}. "

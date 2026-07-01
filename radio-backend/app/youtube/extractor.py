@@ -118,10 +118,12 @@ class YouTubeExtractor:
     def extract_playlist_urls(self, playlist_url: str) -> list[str]:
         logger.info(f"Expanding playlist: {playlist_url!r}")
         opts = {
-            "extract_flat": "in_playlist",
+            "extract_flat": True,
             "quiet": True,
             "no_warnings": True,
             "noplaylist": False,
+            "ignoreerrors": True,
+            "socket_timeout": settings.ytdlp_timeout,
         }
         try:
             with self._ydl(opts) as ydl:
@@ -133,13 +135,19 @@ class YouTubeExtractor:
         if not info:
             return []
 
-        entries = info.get("entries") or []
+        entries = list(info.get("entries") or [])
         urls = []
         for entry in entries:
             if not entry:
                 continue
-            vid_id = entry.get("id") or entry.get("url")
-            if vid_id:
+            vid_id = entry.get("id") or ""
+            url = entry.get("url") or ""
+            webpage = entry.get("webpage_url") or ""
+            if webpage.startswith("http"):
+                urls.append(webpage)
+            elif url.startswith("http"):
+                urls.append(url)
+            elif vid_id:
                 urls.append(f"https://www.youtube.com/watch?v={vid_id}")
         logger.info(f"Playlist expanded to {len(urls)} tracks")
         return urls
