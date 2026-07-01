@@ -20,6 +20,10 @@ author = "agent"
 task = "workflow.run"
 args = "Radio Backend"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Icecast Server"
+
 [[workflows.workflow]]
 name = "Radio Backend"
 author = "agent"
@@ -30,6 +34,18 @@ outputType = "console"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "fuser -k 8099/tcp 2>/dev/null; sleep 1; cd radio-backend && python3 -m uvicorn main:app --host 0.0.0.0 --port 8099 --workers 1 --log-level info"
+
+[[workflows.workflow]]
+name = "Icecast Server"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "docker stop icecast 2>/dev/null; docker rm icecast 2>/dev/null; sleep 1; docker run --name icecast -p 8000:8000 -e ICECAST_SOURCE_PASSWORD='joy@2007' -e ICECAST_ADMIN_PASSWORD='joy@2007' moul/icecast"
+waitForPort = 8000
+
+[workflows.workflow.metadata]
+outputType = "console"
 
 [agent]
 stack = "PNPM_WORKSPACE"

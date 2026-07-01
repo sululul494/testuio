@@ -13,9 +13,9 @@
     </limits>
     <authentication>
         <source-password>joy@2007</source-password>
-        <relay-password>hackme</relay-password>
+        <relay-password>joy@2007</relay-password>
         <admin-user>itachi</admin-user>
-        <admin-password>joy#2007</admin-password>
+        <admin-password>joy@2007</admin-password>
     </authentication>
     <hostname>localhost</hostname>
     <listen-socket>
@@ -25,12 +25,11 @@
         <header name="Access-Control-Allow-Origin" value="*"/>
     </http-headers>
     <paths>
-        <basedir>/usr/share/icecast2</basedir>
-        <logdir>/var/log/icecast2</logdir>
-        <webroot>/usr/share/icecast2/web</webroot>
-        <adminroot>/usr/share/icecast2/admin</adminroot>
-        <pidfile>/run/icecast2/icecast2.pid</pidfile>
-        <alias source="/" destination="/status.xsl"/>
+        <basedir>/nix/store/czx4m1fqj4vsjcp24k2ca8lm5dcphvyp-icecast-2.4.4/share/icecast</basedir>
+        <logdir>/tmp/icecast-logs</logdir>
+        <webroot>/nix/store/czx4m1fqj4vsjcp24k2ca8lm5dcphvyp-icecast-2.4.4/share/icecast/web</webroot>
+        <adminroot>/nix/store/czx4m1fqj4vsjcp24k2ca8lm5dcphvyp-icecast-2.4.4/share/icecast/admin</adminroot>
+        <pidfile>/tmp/icecast.pid</pidfile>
     </paths>
     <logging>
         <accesslog>access.log</accesslog>
