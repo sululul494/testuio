@@ -20,12 +20,16 @@ from app.player.controller import player
 from app.services.watchdog import watchdog
 from app.utils.startup import run_startup_checks
 
-setup_logging(
-    log_dir=settings.log_dir,
-    log_level=settings.log_level,
-    max_bytes=settings.log_max_bytes,
-    backup_count=settings.log_backup_count,
-)
+try:
+    setup_logging(
+        log_dir=settings.log_dir,
+        log_level=settings.log_level,
+        max_bytes=settings.log_max_bytes,
+        backup_count=settings.log_backup_count,
+    )
+except Exception:
+    import logging
+    logging.basicConfig(level=logging.INFO)
 
 logger = get_logger("startup")
 

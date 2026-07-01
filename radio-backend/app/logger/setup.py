@@ -36,7 +36,6 @@ def setup_logging(
     backup_count: int = 5,
 ) -> None:
     level = getattr(logging, log_level.upper(), logging.INFO)
-    log_path = _ensure_log_dir(log_dir)
 
     fmt = logging.Formatter(
         "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
@@ -46,6 +45,13 @@ def setup_logging(
     console = logging.StreamHandler(sys.stdout)
     console.setFormatter(fmt)
     console.setLevel(level)
+
+    # Fallback: if log dir isn't writable, just use console-only logging
+    try:
+        log_path = _ensure_log_dir(log_dir)
+    except Exception:
+        logging.getLogger("radio").addHandler(console)
+        return
 
     loggers_files: list[tuple[str, str]] = [
         ("radio.player", "player.log"),
@@ -62,9 +68,12 @@ def setup_logging(
         logger = logging.getLogger(logger_name)
         logger.setLevel(level)
         logger.addHandler(console)
-        logger.addHandler(
-            _make_handler(log_path / filename, max_bytes, backup_count, fmt)
-        )
+        try:
+            logger.addHandler(
+                _make_handler(log_path / filename, max_bytes, backup_count, fmt)
+            )
+        except Exception:
+            pass
         logger.propagate = False
 
     error_logger = logging.getLogger("radio.error")
@@ -74,9 +83,12 @@ def setup_logging(
     root.setLevel(level)
     if not root.handlers:
         root.addHandler(console)
-        root.addHandler(
-            _make_handler(log_path / "radio.log", max_bytes, backup_count, fmt)
-        )
+        try:
+            root.addHandler(
+                _make_handler(log_path / "radio.log", max_bytes, backup_count, fmt)
+            )
+        except Exception:
+            pass
 
 
 def get_logger(name: str) -> logging.Logger:
