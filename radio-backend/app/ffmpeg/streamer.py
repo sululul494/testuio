@@ -114,9 +114,11 @@ class FFmpegStreamer:
         cmd.extend([
             "-vn",
             "-c:a", "libmp3lame",
-            "-b:a", f"{settings.audio_bitrate}k",
+            "-q:a", "2",
+            "-b:a", "192k",
             "-ar", str(settings.audio_samplerate),
             "-ac", str(settings.audio_channels),
+            "-af", "loudnorm=I=-14:TP=-1:LRA=11",    // audio clarity normalization
             "-f", "mp3",
             "-ice_name", settings.icecast_name,
             "-ice_description", settings.icecast_description,
