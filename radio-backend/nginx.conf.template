@@ -1,0 +1,51 @@
+upstream api {
+    server 127.0.0.1:8099;
+}
+
+upstream icecast {
+    server 127.0.0.1:8000;
+}
+
+server {
+    listen __PORT__;
+
+    # ── Icecast audio stream ──────────────────────────────────────────────────
+    # Listeners tune in here: https://your-app.up.railway.app/stream
+    location /stream {
+        proxy_pass http://icecast/stream;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+
+        # Disable all buffering — audio must flow continuously
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        chunked_transfer_encoding off;
+    }
+
+    # ── Icecast status & admin ────────────────────────────────────────────────
+    location /status-json.xsl {
+        proxy_pass http://icecast/status-json.xsl;
+        proxy_set_header Host $host;
+    }
+
+    location /admin/ {
+        proxy_pass http://icecast/admin/;
+        proxy_set_header Host $host;
+        proxy_set_header Authorization $http_authorization;
+        proxy_pass_header Authorization;
+    }
+
+    # ── FastAPI backend (everything else) ─────────────────────────────────────
+    location / {
+        proxy_pass http://api;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
+}

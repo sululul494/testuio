@@ -1,19 +1,23 @@
 FROM python:3.12-slim
 
 LABEL maintainer="Icecast Radio Backend"
-LABEL description="Production-grade internet radio backend streaming YouTube audio to Icecast"
+LABEL description="All-in-one internet radio: FastAPI + Icecast + nginx in a single container"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONFAULTHANDLER=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    DEBIAN_FRONTEND=noninteractive \
     LOG_DIR=/app/logs
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     curl \
     ca-certificates \
+    icecast2 \
+    supervisor \
+    nginx \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -24,12 +28,12 @@ RUN pip install --upgrade pip && \
 
 COPY . .
 
-RUN mkdir -p /app/logs && \
+RUN mkdir -p /app/logs /var/log/nginx /run/nginx && \
     chmod +x /app/start.sh
 
-EXPOSE 8000
+EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD sh -c 'curl -f http://localhost:${PORT:-8000}/health || exit 1'
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:${PORT:-8080}/health || exit 1
 
 CMD ["/app/start.sh"]
