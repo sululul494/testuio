@@ -13,35 +13,41 @@ echo "[start.sh] Python: $(python --version)"
 echo "[start.sh] FFmpeg: $(ffmpeg -version 2>&1 | head -1)"
 echo "[start.sh] yt-dlp: $(python -m yt_dlp --version 2>&1 | head -1)"
 
-# ── Validate required secrets ─────────────────────────────────────────────────
-# Accept ICECAST_PASSWORD or ICECAST_SOURCE_PASSWORD (Railway uses the latter).
-ICECAST_PASSWORD="${ICECAST_PASSWORD:-${ICECAST_SOURCE_PASSWORD:-}}"
-if [[ -z "${ICECAST_PASSWORD}" ]]; then
-  echo "[start.sh] ERROR: Set ICECAST_PASSWORD (or ICECAST_SOURCE_PASSWORD) in Railway env vars." >&2
-  exit 1
-fi
-export ICECAST_PASSWORD
+# ── Internal Icecast password ─────────────────────────────────────────────────
+# Generate a clean random hex password so there are no special characters that
+# could corrupt the XML or break FFmpeg's icecast:// URL parser.
+# The user-supplied ICECAST_SOURCE_PASSWORD / ICECAST_PASSWORD is only used
+# for external source clients (e.g. broadcasting from Mixxx). Internally the
+# FastAPI backend always uses this generated value.
+ICECAST_INTERNAL_PASS="$(openssl rand -hex 20)"
+ICECAST_ADMIN_PASS="$(openssl rand -hex 20)"
+export ICECAST_PASSWORD="${ICECAST_INTERNAL_PASS}"
 
-ICECAST_ADMIN_PASS="${ICECAST_ADMIN_PASSWORD:-${ICECAST_PASSWORD}}"
+echo "[start.sh] Configuring Icecast (internal credentials generated)..."
 
-# ── Configure Icecast ─────────────────────────────────────────────────────────
-# Escape sed replacement metacharacters so passwords with & or \ don't corrupt XML.
-escape_sed() {
-  printf '%s' "$1" | sed 's/\\/\\\\/g; s/&/\\\&/g; s/|/\\|/g'
-}
+# Use Python for XML patching — avoids all sed special-character issues.
+python3 - <<PYEOF
+import re, sys
 
-SAFE_SOURCE=$(escape_sed "${ICECAST_PASSWORD}")
-SAFE_ADMIN=$(escape_sed "${ICECAST_ADMIN_PASS}")
+path = "/etc/icecast2/icecast.xml"
+src  = open(path).read()
+sp   = "${ICECAST_INTERNAL_PASS}"
+ap   = "${ICECAST_ADMIN_PASS}"
 
-echo "[start.sh] Configuring Icecast..."
-sed -i "s|<source-password>[^<]*</source-password>|<source-password>${SAFE_SOURCE}</source-password>|g" \
-    /etc/icecast2/icecast.xml
-sed -i "s|<relay-password>[^<]*</relay-password>|<relay-password>${SAFE_SOURCE}</relay-password>|g" \
-    /etc/icecast2/icecast.xml
-sed -i "s|<admin-password>[^<]*</admin-password>|<admin-password>${SAFE_ADMIN}</admin-password>|g" \
-    /etc/icecast2/icecast.xml
-# Icecast listens on 8000 internally — nginx proxies it externally
-sed -i "s|<port>[^<]*</port>|<port>8000</port>|g" /etc/icecast2/icecast.xml
+src = re.sub(r"<source-password>[^<]*</source-password>",
+             f"<source-password>{sp}</source-password>", src)
+src = re.sub(r"<relay-password>[^<]*</relay-password>",
+             f"<relay-password>{sp}</relay-password>", src)
+src = re.sub(r"<admin-password>[^<]*</admin-password>",
+             f"<admin-password>{ap}</admin-password>", src)
+
+open(path, "w").write(src)
+print("[start.sh] Icecast XML patched OK")
+
+# Verify
+assert sp in open(path).read(), "source-password not found after patch!"
+print("[start.sh] Icecast XML verification passed")
+PYEOF
 
 # ── Configure nginx ───────────────────────────────────────────────────────────
 PORT="${PORT:-8080}"
