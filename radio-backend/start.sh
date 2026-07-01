@@ -21,7 +21,18 @@ echo "[start.sh] yt-dlp: $(python -m yt_dlp --version 2>&1 | head -1)"
 # FastAPI backend always uses this generated value.
 ICECAST_INTERNAL_PASS="$(openssl rand -hex 20)"
 ICECAST_ADMIN_PASS="$(openssl rand -hex 20)"
+
+# Force the backend to use the Icecast instance running inside this container.
+# Railway may still have old env vars pointing to the separate Icecast service;
+# override them so FFmpeg, the API, and Icecast all agree on localhost:8000/stream.
+export ICECAST_HOST="localhost"
+export ICECAST_PORT="8000"
+export ICECAST_USER="source"
+export ICECAST_MOUNT="/stream"
 export ICECAST_PASSWORD="${ICECAST_INTERNAL_PASS}"
+export ICECAST_NAME="Itachi Hits Radio"
+export ICECAST_DESCRIPTION="Live internet radio stream"
+export ICECAST_PUBLIC="0"
 
 echo "[start.sh] Configuring Icecast (internal credentials generated)..."
 
