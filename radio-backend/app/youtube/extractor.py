@@ -82,7 +82,7 @@ class YouTubeExtractor:
             },
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["ios", "web"],
+                    "player_client": ["tv_embedded", "web"],
                     "player_skip": ["webpage", "configs"],
                 }
             },

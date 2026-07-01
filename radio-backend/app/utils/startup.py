@@ -112,6 +112,25 @@ def verify_internet() -> None:
         logger.warning(f"⚠ Internet connectivity check failed: {exc}")
 
 
+def verify_cookies() -> None:
+    from app.config.settings import settings
+    if settings.youtube_cookies_b64:
+        try:
+            import base64
+            raw = base64.b64decode(settings.youtube_cookies_b64).decode("utf-8", errors="replace")
+            lines = [l for l in raw.splitlines() if l.strip() and not l.startswith("#")]
+            domains = set()
+            for line in lines:
+                parts = line.split("\t")
+                if len(parts) >= 3:
+                    domains.add(parts[0].strip())
+            logger.info(f"✓ YOUTUBE_COOKIES_B64 loaded ({len(lines)} entries, {len(domains)} domains)")
+        except Exception as exc:
+            logger.error(f"✗ Failed to decode YOUTUBE_COOKIES_B64: {exc}")
+    else:
+        logger.warning("⚠ YOUTUBE_COOKIES_B64 not set — YouTube extractions may fail on cloud IPs")
+
+
 def detect_environment() -> None:
     env_type = "Unknown"
     if os.environ.get("RAILWAY_ENVIRONMENT"):
@@ -135,6 +154,7 @@ def run_startup_checks() -> None:
         ("Log directory", verify_log_dir),
         ("Icecast reachability", verify_icecast_reachable),
         ("Internet connectivity", verify_internet),
+        ("YouTube cookies", verify_cookies),
         ("Deployment environment", detect_environment),
     ]
     for name, check_fn in checks:

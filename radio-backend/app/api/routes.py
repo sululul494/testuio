@@ -36,6 +36,18 @@ logger = get_logger("api")
 router = APIRouter()
 
 
+@router.get("/debug/env")
+async def debug_env() -> dict:
+    """Return whether YOUTUBE_COOKIES_B64 is set (value hidden)."""
+    has_cookies = bool(settings.youtube_cookies_b64)
+    return {
+        "youtube_cookies_b64_set": has_cookies,
+        "youtube_cookies_b64_length": len(settings.youtube_cookies_b64) if has_cookies else 0,
+        "ytdlp_format": settings.ytdlp_format,
+        "ytdlp_timeout": settings.ytdlp_timeout,
+    }
+
+
 @router.get("/debug/logs")
 async def debug_logs(lines: int = 100) -> dict:
     """Return tail of local log files for debugging Railway/FFmpeg issues."""
