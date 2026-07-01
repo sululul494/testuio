@@ -22,7 +22,7 @@ class FFmpegStreamer:
         self.stop()
         cmd = self._build_command(audio_url, track_title)
         logger.info(f"Starting FFmpeg for: {track_title!r}")
-        logger.debug(f"FFmpeg command: {' '.join(cmd)}")
+        logger.info(f"FFmpeg command: {' '.join(cmd)}")
         try:
             with self._lock:
                 self._process = subprocess.Popen(
@@ -112,6 +112,7 @@ class FFmpegStreamer:
                 proc = self._process
             if proc is None or proc.stderr is None:
                 return
+            lines: list[str] = []
             try:
                 for raw_line in proc.stderr:
                     try:
@@ -119,7 +120,13 @@ class FFmpegStreamer:
                     except Exception:
                         continue
                     if line:
+                        lines.append(line)
                         logger.warning(f"[ffmpeg:{track_title!r}] {line}")
+                exit_code = proc.poll()
+                logger.warning(
+                    f"[ffmpeg:{track_title!r}] process ended (exit_code={exit_code}). "
+                    f"Last stderr lines: {lines[-10:]!r}"
+                )
             except Exception:
                 pass
 

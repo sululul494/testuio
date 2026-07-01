@@ -41,6 +41,20 @@ src = re.sub(r"<relay-password>[^<]*</relay-password>",
 src = re.sub(r"<admin-password>[^<]*</admin-password>",
              f"<admin-password>{ap}</admin-password>", src)
 
+# Ensure the public /stream mount is explicitly defined so listeners can hit it
+# even if the source hasn't connected yet, and so source clients know the mount.
+if "<mount>/stream" not in src:
+    mount_block = """
+    <mount>
+        <mount-point>/stream</mount-point>
+        <password>___MOUNT_SOURCE_PASS___</password>
+        <max-listeners>1000</max-listeners>
+        <burst-size>65536</burst-size>
+    </mount>
+"""
+    mount_block = mount_block.replace("___MOUNT_SOURCE_PASS___", sp)
+    src = src.replace("</icecast>", f"{mount_block}</icecast>")
+
 open(path, "w").write(src)
 print("[start.sh] Icecast XML patched OK")
 
