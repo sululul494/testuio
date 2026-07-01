@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Always run from the app directory so Python can resolve 'main' and 'app.*'
+cd /app
+
 echo "========================================"
 echo "  Icecast Radio Backend — Starting Up"
 echo "========================================"

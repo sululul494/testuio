@@ -162,10 +162,13 @@ async def health() -> HealthResponse:
     player_ok = player.is_alive()
     api_ok = True
 
-    healthy = icecast_ok and queue_ok and player_ok and api_ok
+    # Icecast is a downstream dependency — its absence means degraded, not down.
+    # Only core internal components (queue, player, api) determine liveness for
+    # Railway's healthcheck. A 503 here causes Railway to kill the container.
+    core_healthy = queue_ok and player_ok and api_ok
 
     response = HealthResponse(
-        status="ok" if healthy else "degraded",
+        status="ok" if (core_healthy and icecast_ok) else "degraded",
         icecast=icecast_ok,
         ffmpeg=ffmpeg_ok,
         queue=queue_ok,
@@ -173,7 +176,7 @@ async def health() -> HealthResponse:
         api=api_ok,
     )
 
-    if not healthy:
+    if not core_healthy:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content=response.model_dump(),
