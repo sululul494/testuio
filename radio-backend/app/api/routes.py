@@ -54,6 +54,58 @@ async def debug_logs(lines: int = 100) -> dict:
     return {"logs": result}
 
 
+@router.get("/debug/icecast-config")
+async def debug_icecast_config() -> dict:
+    """Return the effective Icecast XML with secrets redacted."""
+    import re
+    path = Path("/etc/icecast2/icecast.xml")
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+        # Redact all password-like tags
+        redacted = re.sub(r"(<[^>/]*password[^>]*>)[^<]*(</[^>]*>)", r"\1***REDACTED***\2", text, flags=re.IGNORECASE)
+        return {"path": str(path), "xml": redacted}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+@router.post("/debug/ffmpeg-test")
+async def debug_ffmpeg_test() -> dict:
+    """Run a 10-second sine wave directly through FFmpeg and return its full stderr."""
+    import subprocess
+    cmd = [
+        settings.ffmpeg_path,
+        "-hide_banner",
+        "-loglevel", "debug",
+        "-f", "lavfi",
+        "-i", "sine=frequency=1000:duration=10",
+        "-vn",
+        "-c:a", "libmp3lame",
+        "-b:a", f"{settings.audio_bitrate}k",
+        "-ar", str(settings.audio_samplerate),
+        "-ac", str(settings.audio_channels),
+        "-f", "mp3",
+        "-content_type", "audio/mpeg",
+        settings.icecast_url,
+    ]
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,
+    )
+    try:
+        stdout, stderr = proc.communicate(timeout=12)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        stdout, stderr = proc.communicate()
+    return {
+        "command": " ".join(cmd),
+        "exit_code": proc.returncode,
+        "stderr": stderr.decode("utf-8", errors="replace").splitlines(),
+        "stdout": stdout.decode("utf-8", errors="replace").splitlines()[:20],
+    }
+
+
 @router.post("/test-tone")
 async def test_tone() -> dict:
     """Feed a 60-second generated sine wave into Icecast to verify the stream path."""
