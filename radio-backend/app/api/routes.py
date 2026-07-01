@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Any, Dict
 
@@ -43,7 +44,10 @@ async def play(req: PlayRequest) -> PlayResponse:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     try:
-        track = extractor.extract_info(ytinput, requested_by=req.requested_by)
+        # yt-dlp does blocking I/O; run it in a thread so the event loop stays free
+        track = await asyncio.to_thread(
+            extractor.extract_info, ytinput, requested_by=req.requested_by
+        )
     except SkippableError as exc:
         logger.warning(f"Track not playable: {exc}")
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
