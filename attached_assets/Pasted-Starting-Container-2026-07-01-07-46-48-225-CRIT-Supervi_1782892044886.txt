@@ -1,0 +1,45 @@
+Starting Container
+========================================
+2026-07-01 07:46:48,225 CRIT Supervisor is running as root.  Privileges were not dropped because no user is specified in the config file.  If you intend to run as root, you can set user=root in the config file to avoid this message.
+  Icecast Radio Backend — Starting Up
+2026-07-01 07:46:48,226 INFO supervisord started with pid 1
+========================================
+[start.sh] Python: Python 3.12.13
+[start.sh] FFmpeg: ffmpeg version 7.1.5-0+deb13u1 Copyright (c) 2000-2026 the FFmpeg developers
+[start.sh] yt-dlp: 2026.06.09
+[start.sh] Configuring Icecast...
+[start.sh] Configuring nginx on port 8080...
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+[start.sh] All services configured. Launching via supervisord...
+2026-07-01 07:46:49,228 INFO spawned: 'icecast' with pid 22
+2026-07-01 07:46:49,229 INFO spawned: 'nginx' with pid 23
+2026-07-01 07:46:49,230 INFO spawned: 'api' with pid 24
+2026-07-01 07:46:49,838 WARN exited: icecast (exit status 1; not expected)
+2026-07-01 07:46:51,080 INFO spawned: 'icecast' with pid 83
+2026-07-01 07:46:51,080 INFO success: nginx entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-07-01 07:46:51,080 INFO success: api entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-07-01 07:46:51,691 WARN exited: icecast (exit status 1; not expected)
+2026-07-01 07:46:53,695 INFO spawned: 'icecast' with pid 85
+2026-07-01 07:46:55,200 INFO success: icecast entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-07-01 07:46:55,200 WARN exited: icecast (exit status 1; not expected)
+2026-07-01 07:46:56,023 INFO spawned: 'icecast' with pid 88
+2026-07-01 07:46:56,634 WARN exited: icecast (exit status 1; not expected)
+2026-07-01 07:46:57,943 INFO spawned: 'icecast' with pid 92
+2026-07-01 07:46:58,554 WARN exited: icecast (exit status 1; not expected)
+2026-07-01 07:47:01,206 INFO spawned: 'icecast' with pid 97
+2026-07-01 07:47:01,818 WARN exited: icecast (exit status 1; not expected)
+2026-07-01 07:47:04,849 INFO spawned: 'icecast' with pid 102
+2026-07-01 07:47:06,461 INFO success: icecast entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-07-01 07:47:06,461 WARN exited: icecast (exit status 1; not expected)
+2026-07-01 07:47:06,565 INFO spawned: 'icecast' with pid 105
+2026-07-01 07:47:07,536 WARN exited: icecast (exit status 1; not expected)
+2026-07-01 07:47:08,672 INFO spawned: 'icecast' with pid 108
+2026-07-01 07:47:09,284 WARN exited: icecast (exit status 1; not expected)
+2026-07-01 07:47:11,995 INFO spawned: 'icecast' with pid 114
+2026-07-01 07:47:12,607 WARN exited: icecast (exit status 1; not expected)
+2026-07-01 07:47:16,158 INFO spawned: 'icecast' with pid 119
+2026-07-01 07:47:17,340 INFO success: icecast entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-07-01 07:47:17,341 WARN exited: icecast (exit status 1; not expected)
+2026-07-01 07:47:17,444 INFO spawned: 'icecast' with pid 123
+2026-07-01 07:47:18,056 WARN exited: icecast (exit status 1; not expected)
