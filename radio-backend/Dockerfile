@@ -29,7 +29,10 @@ RUN pip install --upgrade pip && \
 COPY . .
 
 RUN mkdir -p /app/logs /var/log/nginx /run/nginx && \
-    # icecast2 Debian package needs these dirs owned by its system user
+    # Create icecast2 system user/group explicitly — DEBIAN_FRONTEND=noninteractive
+    # skips postinst scripts on python:3.12-slim so the package doesn't create them.
+    getent group icecast2 || groupadd --system icecast2 && \
+    getent passwd icecast2 || useradd --system --no-create-home --gid icecast2 icecast2 && \
     mkdir -p /var/log/icecast2 /var/run/icecast2 && \
     chown -R icecast2:icecast2 /var/log/icecast2 /var/run/icecast2 && \
     chmod +x /app/start.sh
