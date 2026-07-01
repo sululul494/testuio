@@ -14,7 +14,7 @@ from app.models.schemas import TrackInfo
 
 logger = get_logger("ytdlp")
 
-COOKIES_PATH = "/home/runner/workspace/icecast-data/youtube_cookies.txt"
+COOKIES_PATH = "/tmp/youtube_cookies.txt"
 
 
 def _write_cookies() -> None:
