@@ -82,10 +82,11 @@ class YouTubeExtractor:
             },
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["tv_embedded", "web"],
-                    "player_skip": ["webpage", "configs"],
+                    "player_skip": ["webpage", "configs", "js"],
                 }
             },
+            "nocheckcertificate": True,
+            "geo_bypass": True,
             "postprocessors": [],
         }
         if os.path.exists(COOKIES_PATH):
