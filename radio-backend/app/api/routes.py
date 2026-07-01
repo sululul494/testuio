@@ -106,16 +106,58 @@ async def debug_ffmpeg_test() -> dict:
     }
 
 
+_test_tone_proc: Any = None
+
+
+async def _run_test_tone(cmd: list[str]) -> None:
+    """Background task that runs a 60-second sine wave into Icecast."""
+    global _test_tone_proc
+    import subprocess
+    _test_tone_proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL,
+        close_fds=True,
+    )
+    try:
+        _test_tone_proc.wait(timeout=65)
+    except subprocess.TimeoutExpired:
+        _test_tone_proc.terminate()
+    finally:
+        _test_tone_proc = None
+
+
 @router.post("/test-tone")
 async def test_tone() -> dict:
     """Feed a 60-second generated sine wave into Icecast to verify the stream path."""
-    if ffmpeg_streamer.is_running():
-        ffmpeg_streamer.stop()
+    global _test_tone_proc
+    if _test_tone_proc is not None:
+        try:
+            _test_tone_proc.terminate()
+        except Exception:
+            pass
+        _test_tone_proc = None
         await asyncio.sleep(0.5)
-    ffmpeg_streamer.start(
-        "lavfi:sine=frequency=1000:duration=60",
-        track_title="Test Tone",
-    )
+
+    cmd = [
+        settings.ffmpeg_path,
+        "-hide_banner",
+        "-loglevel", "warning",
+        "-f", "lavfi",
+        "-i", "sine=frequency=1000:duration=60",
+        "-vn",
+        "-c:a", "libmp3lame",
+        "-b:a", f"{settings.audio_bitrate}k",
+        "-ar", str(settings.audio_samplerate),
+        "-ac", str(settings.audio_channels),
+        "-f", "mp3",
+        "-ice_name", "Itachi Hits Radio",
+        "-ice_description", "Test tone",
+        "-content_type", "audio/mpeg",
+        settings.icecast_url,
+    ]
+    asyncio.create_task(_run_test_tone(cmd))
     return {"success": True, "message": "60-second test tone streaming to /stream"}
 
 
