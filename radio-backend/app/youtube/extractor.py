@@ -82,7 +82,8 @@ class YouTubeExtractor:
             },
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["web", "android"],
+                    "player_client": ["ios", "web"],
+                    "player_skip": ["webpage", "configs"],
                 }
             },
             "postprocessors": [],
@@ -104,6 +105,7 @@ class YouTubeExtractor:
                 info = ydl.extract_info(url, download=False)
         except yt_dlp.utils.DownloadError as exc:
             msg = str(exc).lower()
+            logger.warning(f"yt-dlp DownloadError for {url!r}: {msg[:200]}")
             self._raise_for_message(msg, url)
             raise ExtractionError(f"yt-dlp error for {url!r}: {exc}") from exc
         except Exception as exc:
@@ -111,6 +113,7 @@ class YouTubeExtractor:
             raise ExtractionError(str(exc)) from exc
 
         if info is None:
+            logger.warning(f"yt-dlp returned None for {url!r}")
             raise SkippableError(f"No info returned for {url!r}")
 
         if info.get("_type") == "playlist":
@@ -146,14 +149,15 @@ class YouTubeExtractor:
 
     def extract_playlist_urls(self, playlist_url: str) -> list[str]:
         logger.info(f"Expanding playlist: {playlist_url!r}")
-        opts = {
+        opts = dict(self._base_opts)
+        opts.update({
             "extract_flat": True,
             "quiet": True,
             "no_warnings": True,
             "noplaylist": False,
             "ignoreerrors": True,
             "socket_timeout": settings.ytdlp_timeout,
-        }
+        })
         try:
             with self._ydl(opts) as ydl:
                 info = ydl.extract_info(playlist_url, download=False)
