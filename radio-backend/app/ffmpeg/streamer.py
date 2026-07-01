@@ -83,15 +83,23 @@ class FFmpegStreamer:
 
     def _build_command(self, audio_url: str, track_title: str) -> list[str]:
         icecast_url = settings.icecast_url
-        return [
+        cmd = [
             settings.ffmpeg_path,
             "-hide_banner",
             "-loglevel", "warning",
-            "-reconnect", "1",
-            "-reconnect_streamed", "1",
-            "-reconnect_delay_max", str(settings.ffmpeg_reconnect_delay),
-            "-timeout", "30000000",
-            "-i", audio_url,
+        ]
+        # Support synthetic FFmpeg sources (e.g. lavfi test tone) for diagnostics
+        if audio_url.startswith("lavfi:"):
+            cmd.extend(["-f", "lavfi", "-i", audio_url.removeprefix("lavfi:")])
+        else:
+            cmd.extend([
+                "-reconnect", "1",
+                "-reconnect_streamed", "1",
+                "-reconnect_delay_max", str(settings.ffmpeg_reconnect_delay),
+                "-timeout", "30000000",
+                "-i", audio_url,
+            ])
+        cmd.extend([
             "-vn",
             "-c:a", "libmp3lame",
             "-b:a", f"{settings.audio_bitrate}k",
@@ -104,7 +112,8 @@ class FFmpegStreamer:
             "-ice_public", "1" if settings.icecast_public else "0",
             "-content_type", "audio/mpeg",
             icecast_url,
-        ]
+        ])
+        return cmd
 
     def _start_stderr_reader(self, track_title: str) -> None:
         def _read() -> None:

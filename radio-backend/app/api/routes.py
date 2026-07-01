@@ -54,6 +54,19 @@ async def debug_logs(lines: int = 100) -> dict:
     return {"logs": result}
 
 
+@router.post("/test-tone")
+async def test_tone() -> dict:
+    """Feed a 60-second generated sine wave into Icecast to verify the stream path."""
+    if ffmpeg_streamer.is_running():
+        ffmpeg_streamer.stop()
+        await asyncio.sleep(0.5)
+    ffmpeg_streamer.start(
+        "lavfi:sine=frequency=1000:duration=60",
+        track_title="Test Tone",
+    )
+    return {"success": True, "message": "60-second test tone streaming to /stream"}
+
+
 @router.post("/play", response_model=PlayResponse)
 async def play(req: PlayRequest) -> PlayResponse:
     logger.info(f"POST /play — query={req.query!r} url={req.url!r} by={req.requested_by!r}")
