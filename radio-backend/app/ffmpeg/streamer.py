@@ -119,7 +119,7 @@ class FFmpegStreamer:
                     except Exception:
                         continue
                     if line:
-                        logger.debug(f"[ffmpeg:{track_title!r}] {line}")
+                        logger.warning(f"[ffmpeg:{track_title!r}] {line}")
             except Exception:
                 pass
 
