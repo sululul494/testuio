@@ -1,0 +1,48 @@
+[start.sh] yt-dlp: 2024.12.13
+[start.sh] Starting Uvicorn on port 8080
+Starting Container
+INFO:     Started server process [1]
+INFO:     Waiting for application startup.
+2026-07-01T07:30:47 | INFO     | radio.startup | Application startup sequence beginning
+2026-07-01T07:30:47 | INFO     | radio.startup | ============================================================
+2026-07-01T07:30:47 | INFO     | radio.startup |   Icecast Radio Backend — Startup Verification
+2026-07-01T07:30:47 | INFO     | radio.startup | ============================================================
+2026-07-01T07:30:47 | INFO     | radio.startup | Python version: 3.12.13
+2026-07-01T07:30:47 | INFO     | radio.startup | ✓ Python version OK
+2026-07-01T07:30:47 | INFO     | radio.startup | ============================================================
+2026-07-01T07:30:47 | INFO     | radio.startup |   All startup checks passed. Starting server.
+2026-07-01T07:30:47 | INFO     | radio.startup | ============================================================
+2026-07-01T07:30:47 | INFO     | radio.autodj | AutoDJ starting — playlist load deferred to background
+2026-07-01T07:30:47 | INFO     | radio.startup | ✓ FFmpeg found: ffmpeg version 7.1.5-0+deb13u1 Copyright (c) 2000-2026 the FFmpeg developers
+2026-07-01T07:30:47 | INFO     | radio.startup | ✓ yt-dlp version: 2024.12.13
+2026-07-01T07:30:47 | INFO     | radio.startup | ✓ Required environment variables present
+2026-07-01T07:30:47 | INFO     | radio.startup | ✓ Log directory writable: /app/logs
+2026-07-01T07:30:47 | INFO     | radio.startup | Checking Icecast reachability at localhost:8000
+2026-07-01T07:30:47 | WARNING  | radio.startup | ⚠ Icecast not reachable at localhost:8000: [Errno 111] Connection refused. Starting anyway; player will retry.
+2026-07-01T07:30:47 | INFO     | radio.startup | ✓ Internet connectivity OK
+2026-07-01T07:30:47 | INFO     | radio.startup | ✓ Environment: Railway (production)
+2026-07-01T07:30:47 | INFO     | radio.ytdlp | Expanding playlist: 'https://youtube.com/playlist?list=PLDIoUOhQQPlXzhp-83rECoLaV6BwFtNC4'
+2026-07-01T07:30:47 | INFO     | radio.player | Player starting
+2026-07-01T07:30:47 | INFO     | radio.player | Player loop started
+2026-07-01T07:30:47 | INFO     | radio.watchdog | Watchdog starting
+2026-07-01T07:30:47 | WARNING  | radio.autodj | AutoDJ has no URLs to play
+2026-07-01T07:30:47 | WARNING  | radio.player | No track available; waiting 5 seconds
+2026-07-01T07:30:47 | INFO     | radio.startup | All services started successfully
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+2026-07-01T07:30:48 | INFO     | radio.ytdlp | Playlist expanded to 0 tracks
+2026-07-01T07:30:48 | INFO     | radio.autodj | Loaded 0 tracks from 'https://youtube.com/playlist?list=PLDIoUOhQQPlXzhp-83rECoLaV6BwFtNC4'
+2026-07-01T07:30:48 | WARNING  | radio.autodj | AutoDJ playlists yielded no tracks
+2026-07-01T07:30:50 | WARNING  | radio.player | Icecast connection check failed: HTTPConnectionPool(host='localhost', port=8000): Max retries exceeded with url: /status-json.xsl (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f43f40b2c00>: Failed to establish a new connection: [Errno 111] Connection refused'))
+2026-07-01T07:30:50 | WARNING  | radio.player | Icecast connection check failed: HTTPConnectionPool(host='localhost', port=8000): Max retries exceeded with url: /status-json.xsl (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f43f40b2420>: Failed to establish a new connection: [Errno 111] Connection refused'))
+INFO:     100.64.0.2:57359 - "GET /health HTTP/1.1" 200 OK
+2026-07-01T07:30:52 | WARNING  | radio.autodj | AutoDJ has no URLs to play
+2026-07-01T07:30:52 | WARNING  | radio.player | No track available; waiting 5 seconds
+2026-07-01T07:30:57 | WARNING  | radio.autodj | AutoDJ has no URLs to play
+2026-07-01T07:30:57 | WARNING  | radio.player | No track available; waiting 5 seconds
+2026-07-01T07:31:00 | WARNING  | radio.player | Icecast connection check failed: HTTPConnectionPool(host='localhost', port=8000): Max retries exceeded with url: /status-json.xsl (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f43ded54410>: Failed to establish a new connection: [Errno 111] Connection refused'))
+2026-07-01T07:31:00 | WARNING  | radio.watchdog | Icecast connection check failed
+2026-07-01T07:31:02 | WARNING  | radio.autodj | AutoDJ has no URLs to play
+2026-07-01T07:31:02 | WARNING  | radio.player | No track available; waiting 5 seconds
+2026-07-01T07:31:07 | WARNING  | radio.autodj | AutoDJ has no URLs to play
+2026-07-01T07:31:07 | WARNING  | radio.player | No track available; waiting 5 seconds
