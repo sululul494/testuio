@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     autodj_enabled: bool = Field(True, alias="AUTODJ_ENABLED")
 
     # ── yt-dlp ───────────────────────────────────────────────────────────────
-    ytdlp_format: str = Field("bestaudio/best", alias="YTDLP_FORMAT")
+    ytdlp_format: str = Field("best", alias="YTDLP_FORMAT")
     ytdlp_max_duration: int = Field(7200, alias="YTDLP_MAX_DURATION")
     ytdlp_timeout: int = Field(30, alias="YTDLP_TIMEOUT")
     youtube_cookies_b64: Optional[str] = Field(None, alias="YOUTUBE_COOKIES_B64")

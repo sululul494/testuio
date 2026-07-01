@@ -194,6 +194,7 @@ class YouTubeExtractor:
         if url:
             return url
         formats = info.get("formats") or []
+        # First try audio-only formats
         audio_formats = [
             f for f in formats
             if f.get("vcodec") == "none" and f.get("url")
@@ -205,6 +206,20 @@ class YouTubeExtractor:
                 reverse=True,
             )
             return best[0]["url"]
+        # Fallback: any format with audio (ios client uses muxed audio+video)
+        # Prefer formats with audio bitrate
+        mixed_formats = [
+            f for f in formats
+            if f.get("url") and f.get("acodec") != "none"
+        ]
+        if mixed_formats:
+            best = sorted(
+                mixed_formats,
+                key=lambda f: (f.get("abr") or 0, f.get("height") or 0),
+                reverse=True,
+            )
+            return best[0]["url"]
+        # Last resort: any format with a URL
         for f in formats:
             if f.get("url"):
                 return f["url"]
