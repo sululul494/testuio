@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import base64
 import os
+import random
 import re
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
+import requests
 import yt_dlp
 
 from app.config.settings import settings
@@ -110,6 +112,11 @@ class YouTubeExtractor:
         except yt_dlp.utils.DownloadError as exc:
             msg = str(exc).lower()
             logger.warning(f"yt-dlp DownloadError for {url!r}: {msg[:200]}")
+            # Try Invidious fallback on bot/403 errors
+            if "bot" in msg or "403" in msg or "sign in" in msg:
+                track = self._invidious_fallback(url, requested_by)
+                if track:
+                    return track
             self._raise_for_message(msg, url)
             raise ExtractionError(f"yt-dlp error for {url!r}: {exc}") from exc
         except Exception as exc:
@@ -251,6 +258,78 @@ class YouTubeExtractor:
     @staticmethod
     def _sanitize(text: str) -> str:
         return text.encode("utf-8", errors="replace").decode("utf-8")
+
+    def _invidious_fallback(self, url: str, requested_by: str) -> Optional[TrackInfo]:
+        """Try Invidious API when YouTube blocks the IP with bot detection."""
+        # Extract video ID from URL
+        match = re.search(r"[?&]v=([a-zA-Z0-9_-]{11})", url)
+        if not match:
+            logger.warning(f"Cannot extract video ID from {url!r} for Invidious fallback")
+            return None
+        video_id = match.group(1)
+
+        # List of public Invidious instances (rotated for reliability)
+        instances = [
+            "https://iv.datura.network",
+            "https://iv.nboeck.de",
+            "https://iv.melmac.space",
+            "https://iv.nboeck.de",
+            "https://y.com.sb",
+        ]
+        random.shuffle(instances)
+
+        for instance in instances[:3]:
+            api_url = f"{instance}/api/v1/videos/{video_id}"
+            try:
+                logger.info(f"Trying Invidious fallback: {api_url}")
+                resp = requests.get(api_url, timeout=15, headers={
+                    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Accept": "application/json",
+                })
+                if resp.status_code != 200:
+                    logger.warning(f"Invidious {instance} returned {resp.status_code}")
+                    continue
+                data = resp.json()
+                title = data.get("title", "Unknown")
+                duration = data.get("lengthSeconds", 0)
+                thumbnail = data.get("videoThumbnails", [{}])[0].get("url", "")
+
+                # Find best audio-only or mixed format
+                formats = data.get("adaptiveFormats", []) or data.get("formatStreams", [])
+                audio_url = None
+                best_abr = 0
+                for f in formats:
+                    f_type = f.get("type", "")
+                    if "audio" in f_type:
+                        abr = f.get("bitrate", 0)
+                        if abr > best_abr:
+                            best_abr = abr
+                            audio_url = f.get("url")
+                if not audio_url and formats:
+                    # Fallback to any format with a URL
+                    for f in formats:
+                        if f.get("url"):
+                            audio_url = f["url"]
+                            break
+                if not audio_url:
+                    logger.warning(f"Invidious {instance}: no URL for {video_id}")
+                    continue
+
+                track = TrackInfo(
+                    position=0,
+                    title=self._sanitize(title),
+                    duration=self._format_duration(duration),
+                    url=audio_url,
+                    thumbnail=thumbnail,
+                    requested_by=requested_by,
+                )
+                logger.info(f"Invidious fallback succeeded: {track.title!r} via {instance}")
+                return track
+            except Exception as exc:
+                logger.warning(f"Invidious {instance} failed: {exc}")
+                continue
+        logger.error(f"All Invidious fallbacks failed for {video_id}")
+        return None
 
 
 extractor = YouTubeExtractor()
