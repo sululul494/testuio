@@ -29,6 +29,9 @@ RUN pip install --upgrade pip && \
 COPY . .
 
 RUN mkdir -p /app/logs /var/log/nginx /run/nginx && \
+    # icecast2 Debian package needs these dirs owned by its system user
+    mkdir -p /var/log/icecast2 /var/run/icecast2 && \
+    chown -R icecast2:icecast2 /var/log/icecast2 /var/run/icecast2 && \
     chmod +x /app/start.sh
 
 EXPOSE 8080
