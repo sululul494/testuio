@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     icecast2 \
     supervisor \
     nginx \
+    nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

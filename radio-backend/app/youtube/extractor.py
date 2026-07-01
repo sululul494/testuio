@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import os
 import re
 import time
 from typing import Any, Dict, Optional
@@ -11,6 +13,25 @@ from app.logger.setup import get_logger
 from app.models.schemas import TrackInfo
 
 logger = get_logger("ytdlp")
+
+COOKIES_PATH = "/app/youtube_cookies.txt"
+
+
+def _write_cookies() -> None:
+    """Decode base64 cookies from env and write to a netscape cookies file for yt-dlp."""
+    if not settings.youtube_cookies_b64:
+        return
+    try:
+        raw = base64.b64decode(settings.youtube_cookies_b64).decode("utf-8", errors="replace")
+        with open(COOKIES_PATH, "w", encoding="utf-8") as f:
+            f.write(raw)
+        logger.info("YouTube cookies file written")
+    except Exception as exc:
+        logger.error(f"Failed to write YouTube cookies: {exc}")
+
+
+# Write cookies once at module load so all yt-dlp instances use them.
+_write_cookies()
 
 PRIVATE_ERRORS = (
     "private video",
@@ -58,9 +79,17 @@ class YouTubeExtractor:
                     "Chrome/120.0.0.0 Safari/537.36"
                 )
             },
-            "extractor_args": {"youtube": {"skip": ["dash", "hls"]}},
+            "extractor_args": {
+                "youtube": {
+                    "skip": ["dash", "hls"],
+                    "js_runtimes": ["node"],
+                }
+            },
             "postprocessors": [],
         }
+        if os.path.exists(COOKIES_PATH):
+            self._base_opts["cookies"] = COOKIES_PATH
+            logger.info("Using YouTube cookies from %s", COOKIES_PATH)
 
     def _ydl(self, extra: Optional[Dict[str, Any]] = None) -> yt_dlp.YoutubeDL:
         opts = dict(self._base_opts)
