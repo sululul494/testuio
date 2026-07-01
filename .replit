@@ -33,7 +33,8 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "fuser -k 8099/tcp 2>/dev/null; sleep 1; cd radio-backend && python3 -m uvicorn main:app --host 0.0.0.0 --port 8099 --workers 1 --log-level info"
+args = "export ICECAST_PASSWORD='joy@2007' && export ICECAST_HOST='localhost' && export ICECAST_PORT='8000' && export ICECAST_USER='source' && export ICECAST_MOUNT='/stream' && export AUTODJ_PLAYLISTS='https://www.youtube.com/playlist?list=PLDIoUOhQQPlXzhp-83rECoLaV6BwFtNC4' && fuser -k 8099/tcp 2>/dev/null; sleep 1; cd radio-backend && python3 -m uvicorn main:app --host 0.0.0.0 --port 8099 --workers 1 --log-level info"
+waitForPort = 8099
 
 [[workflows.workflow]]
 name = "Icecast Server"

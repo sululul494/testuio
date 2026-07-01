@@ -98,6 +98,7 @@ class FFmpegStreamer:
                 "Chrome/120.0.0.0 Safari/537.36"
             )
             cmd.extend([
+                "-re",
                 "-reconnect", "1",
                 "-reconnect_streamed", "1",
                 "-reconnect_delay_max", str(settings.ffmpeg_reconnect_delay),
