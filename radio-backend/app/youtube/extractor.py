@@ -68,31 +68,25 @@ class SkippableError(ExtractionError):
 class YouTubeExtractor:
     def __init__(self) -> None:
         self._base_opts: Dict[str, Any] = {
-            "format": settings.ytdlp_format,
+            "format": "bestaudio[ext=m4a]/bestaudio/best",
             "quiet": True,
             "no_warnings": False,
             "noplaylist": True,
             "socket_timeout": settings.ytdlp_timeout,
-            "source_address": "0.0.0.0",
-            "sleep_interval": 3,
-            "max_sleep_interval": 10,
-            "sleep_requests": 1,
+            "retries": 3,
+            "fragment_retries": 3,
+            "nocheckcertificate": True,
+            "geo_bypass": True,
             "http_headers": {
-                "User-Agent": (
-                    "Mozilla/5.0 (X11; Linux x86_64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120.0.0.0 Safari/537.36"
-                ),
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
                 "Accept-Language": "en-US,en;q=0.9",
             },
             "extractor_args": {
                 "youtube": {
-                    "player_skip": ["webpage", "configs", "js"],
+                    "player_client": ["android", "web"],
+                    "skip": ["hls", "dash"],
                 }
             },
-            "nocheckcertificate": True,
-            "geo_bypass": True,
-            "postprocessors": [],
         }
         if os.path.exists(COOKIES_PATH):
             self._base_opts["cookies"] = COOKIES_PATH
