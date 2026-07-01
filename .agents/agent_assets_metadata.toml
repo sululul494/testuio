@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "A0mhz06Ngdr6lFKb1ZbA8"
+uri = "file://cookies_b64.txt"
+type = "text"
+title = "YouTube Cookies (Base64 Encoded)"
