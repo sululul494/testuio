@@ -22,7 +22,7 @@ class FFmpegStreamer:
         self.stop()
         cmd = self._build_command(audio_url, track_title)
         logger.info(f"Starting FFmpeg for: {track_title!r}")
-        logger.info(f"FFmpeg command: {' '.join(cmd)}")
+        logger.info(f"FFmpeg command: {self._redact_url(' '.join(cmd))}")
         try:
             with self._lock:
                 self._process = subprocess.Popen(
@@ -118,7 +118,7 @@ class FFmpegStreamer:
             "-b:a", "192k",
             "-ar", str(settings.audio_samplerate),
             "-ac", str(settings.audio_channels),
-            "-af", "loudnorm=I=-14:TP=-1:LRA=11",    // audio clarity normalization
+            "-af", "loudnorm=I=-14:TP=-1:LRA=11",    # audio clarity normalization
             "-f", "mp3",
             "-ice_name", settings.icecast_name,
             "-ice_description", settings.icecast_description,
@@ -128,6 +128,11 @@ class FFmpegStreamer:
             icecast_url,
         ])
         return cmd
+
+    def _redact_url(self, text: str) -> str:
+        """Redact credentials from an icecast:// URL inside a command string."""
+        import re
+        return re.sub(r"icecast://[^:@\s]+:[^@\s]+@", "icecast://***:***@", text)
 
     def _start_stderr_reader(self, track_title: str) -> None:
         def _read() -> None:
@@ -143,6 +148,7 @@ class FFmpegStreamer:
                     except Exception:
                         continue
                     if line:
+                        line = self._redact_url(line)
                         lines.append(line)
                         logger.warning(f"[ffmpeg:{track_title!r}] {line}")
                 exit_code = proc.poll()

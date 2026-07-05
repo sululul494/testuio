@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 import psutil
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.responses import JSONResponse
 
 from app.autodj.manager import autodj_manager
@@ -36,7 +36,16 @@ logger = get_logger("api")
 router = APIRouter()
 
 
-@router.get("/debug/env")
+def _require_debug_secret(x_api_secret: str | None = Header(None, alias="X-API-Secret")) -> None:
+    """Protect debug endpoints when API_SECRET is configured; otherwise allow access."""
+    if settings.api_secret and x_api_secret != settings.api_secret:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API secret",
+        )
+
+
+@router.get("/debug/env", dependencies=[Depends(_require_debug_secret)])
 async def debug_env() -> dict:
     """Return whether YOUTUBE_COOKIES_B64 is set (value hidden)."""
     has_cookies = bool(settings.youtube_cookies_b64)
@@ -48,7 +57,7 @@ async def debug_env() -> dict:
     }
 
 
-@router.get("/debug/logs")
+@router.get("/debug/logs", dependencies=[Depends(_require_debug_secret)])
 async def debug_logs(lines: int = 100) -> dict:
     """Return tail of local log files for debugging Railway/FFmpeg issues."""
     log_dir = Path(settings.log_dir)
@@ -66,11 +75,13 @@ async def debug_logs(lines: int = 100) -> dict:
     return {"logs": result}
 
 
-@router.get("/debug/icecast-config")
+@router.get("/debug/icecast-config", dependencies=[Depends(_require_debug_secret)])
 async def debug_icecast_config() -> dict:
     """Return the effective Icecast XML with secrets redacted."""
     import re
-    path = Path("/etc/icecast2/icecast.xml")
+    path = Path("/tmp/icecast-active.xml")
+    if not path.exists():
+        path = Path("/home/runner/workspace/icecast-replit.xml")
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
         # Redact all password-like tags
@@ -80,7 +91,7 @@ async def debug_icecast_config() -> dict:
         return {"error": str(exc)}
 
 
-@router.post("/debug/ffmpeg-test")
+@router.post("/debug/ffmpeg-test", dependencies=[Depends(_require_debug_secret)])
 async def debug_ffmpeg_test() -> dict:
     """Run a 10-second sine wave directly through FFmpeg and return its full stderr."""
     import subprocess
@@ -110,10 +121,14 @@ async def debug_ffmpeg_test() -> dict:
     except subprocess.TimeoutExpired:
         proc.kill()
         stdout, stderr = proc.communicate()
+    def _redact_url(text: str) -> str:
+        import re
+        return re.sub(r"icecast://[^:@\s]+:[^@\s]+@", "icecast://***:***@", text)
+
     return {
-        "command": " ".join(cmd),
+        "command": _redact_url(" ".join(cmd)),
         "exit_code": proc.returncode,
-        "stderr": stderr.decode("utf-8", errors="replace").splitlines(),
+        "stderr": [_redact_url(line) for line in stderr.decode("utf-8", errors="replace").splitlines()],
         "stdout": stdout.decode("utf-8", errors="replace").splitlines()[:20],
     }
 
@@ -140,7 +155,7 @@ async def _run_test_tone(cmd: list[str]) -> None:
         _test_tone_proc = None
 
 
-@router.post("/test-tone")
+@router.post("/test-tone", dependencies=[Depends(_require_debug_secret)])
 async def test_tone() -> dict:
     """Feed a 60-second generated sine wave into Icecast to verify the stream path."""
     global _test_tone_proc
