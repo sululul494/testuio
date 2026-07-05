@@ -1,0 +1,4 @@
+- [Imported project source](imported-project-source.md) — Zip imports may only contain git metadata; the real source is often in a linked remote.
+- [Python C-style comments](python-cstyle-comment.md) — `//` comments in Python cause immediate SyntaxError; grep for them after imports.
+- [YouTube cookies on Replit cloud](replit-cloud-youtube-cookies.md) — yt-dlp from Replit cloud IPs usually hits YouTube bot checks; cookies are required for playback.
+- [Git unrelated-history push](git-unrelated-history-push.md) — Imported projects can have a remote with an unrelated history; merge with `--allow-unrelated-histories` to preserve both sides.
