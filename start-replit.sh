@@ -14,9 +14,23 @@ echo "[start] Python: $(python3 --version)"
 echo "[start] FFmpeg: $(ffmpeg -version 2>&1 | head -1)"
 echo "[start] yt-dlp: $(python3 -m yt_dlp --version 2>&1 | head -1)"
 
+# ── Patch Icecast XML with secrets from the environment ─────────────────────
+ICECAST_PASSWORD="${ICECAST_PASSWORD:?ICECAST_PASSWORD is required}"
+export ICECAST_ADMIN_PASSWORD="${ICECAST_ADMIN_PASSWORD:-${ICECAST_PASSWORD}}"
+
+ACTIVE_XML="/tmp/icecast-active.xml"
+python3 - <<PYEOF
+import os
+src = open('/home/runner/workspace/icecast-replit.xml').read()
+src = src.replace('__ICECAST_PASSWORD__', os.environ['ICECAST_PASSWORD'])
+src = src.replace('__ICECAST_ADMIN_PASSWORD__', os.environ.get('ICECAST_ADMIN_PASSWORD', os.environ['ICECAST_PASSWORD']))
+open('/tmp/icecast-active.xml', 'w').write(src)
+print('[start] Icecast XML patched with environment secrets')
+PYEOF
+
 # ── Start Icecast ─────────────────────────────────────────────────────────────
 echo "[start] Starting Icecast on port 8000..."
-icecast -b -c /home/runner/workspace/icecast-replit.xml
+icecast -b -c "${ACTIVE_XML}"
 sleep 2
 
 # Verify Icecast started

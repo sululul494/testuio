@@ -13,10 +13,10 @@
         <burst-size>262144</burst-size>
     </limits>
     <authentication>
-        <source-password>joy@2007</source-password>
-        <relay-password>hackme</relay-password>
+        <source-password>__ICECAST_PASSWORD__</source-password>
+        <relay-password>__ICECAST_PASSWORD__</relay-password>
         <admin-user>itachi</admin-user>
-        <admin-password>joy#2007</admin-password>
+        <admin-password>__ICECAST_ADMIN_PASSWORD__</admin-password>
     </authentication>
     <hostname>localhost</hostname>
     <listen-socket>
@@ -27,7 +27,7 @@
     </http-headers>
     <mount>
         <mount-name>/stream</mount-name>
-        <password>joy@2007</password>
+        <password>__ICECAST_PASSWORD__</password>
         <max-listeners>1000</max-listeners>
         <burst-on-connect>1</burst-on-connect>
         <burst-size>524288</burst-size>

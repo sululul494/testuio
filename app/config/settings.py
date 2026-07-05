@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     icecast_user: str = Field("source", alias="ICECAST_USER")
     # NOTE: Icecast source clients (FFmpeg) MUST use username "source".
     # "itachi" is the admin-user for the web panel only, not for streaming.
-    icecast_password: str = Field("joy@2007", alias="ICECAST_PASSWORD")
+    icecast_password: str = Field(alias="ICECAST_PASSWORD")
     icecast_mount: str = Field("/stream", alias="ICECAST_MOUNT")
     icecast_name: str = Field("Itachi Hits Radio", alias="ICECAST_NAME")
     icecast_description: str = Field("Live internet radio stream", alias="ICECAST_DESCRIPTION")
