@@ -1,0 +1,408 @@
+import asyncio
+import json
+import os
+import time
+import yt_dlp
+from pathlib import Path
+from config import config
+
+class MusicStreamer:
+    """Lightweight streaming service that reads queue and streams to Zeno.fm"""
+    
+    def __init__(self):
+        self.current_song = None
+        self.is_streaming = False
+        self.ffmpeg_process = None
+        
+    async def run(self):
+        """Main streaming loop"""
+        print("[Streamer] Starting music streamer service...")
+        
+        while True:
+            try:
+                # Check if we're already streaming
+                if self.is_streaming:
+                    await asyncio.sleep(2)
+                    continue
+                
+                # Read queue
+                song_info = self.read_queue()
+                
+                if song_info:
+                    print(f"[Streamer] Processing queue item: {song_info['title']}")
+                    await self.stream_song(song_info)
+                else:
+                    # No songs in queue, wait
+                    await asyncio.sleep(3)
+                
+            except Exception as e:
+                print(f"[Streamer] Error in main loop: {e}")
+                import traceback
+                traceback.print_exc()
+                self.is_streaming = False
+                await asyncio.sleep(3)
+    
+    def read_queue(self) -> dict:
+        """Read first song from queue WITHOUT removing it"""
+        try:
+            if not os.path.exists(config.QUEUE_FILE):
+                return None
+            
+            with open(config.QUEUE_FILE, 'r') as f:
+                lines = f.readlines()
+            
+            if not lines:
+                return None
+            
+            # Parse first line (format: url|||title|||requester)
+            first_line = lines[0].strip()
+            if not first_line:
+                # Remove empty line and try next
+                with open(config.QUEUE_FILE, 'w') as f:
+                    f.writelines(lines[1:])
+                return self.read_queue()
+            
+            parts = first_line.split('|||')
+            if len(parts) != 3:
+                # Invalid format, remove it and try next
+                print(f"[Streamer] Invalid queue format, skipping: {first_line}")
+                with open(config.QUEUE_FILE, 'w') as f:
+                    f.writelines(lines[1:])
+                return self.read_queue()
+            
+            url, title, requester = parts
+            
+            # Return song info WITHOUT removing from queue yet
+            return {'url': url, 'title': title, 'requester': requester}
+            
+        except Exception as e:
+            print(f"[Streamer] Error reading queue: {e}")
+            return None
+    
+    def remove_from_queue(self):
+        """Remove first song from queue after successful processing"""
+        try:
+            if not os.path.exists(config.QUEUE_FILE):
+                return
+            
+            with open(config.QUEUE_FILE, 'r') as f:
+                lines = f.readlines()
+            
+            if lines:
+                with open(config.QUEUE_FILE, 'w') as f:
+                    f.writelines(lines[1:])
+                print(f"[Streamer] Removed song from queue. {len(lines)-1} songs remaining.")
+            
+        except Exception as e:
+            print(f"[Streamer] Error removing from queue: {e}")
+    
+    def get_default_playlist_song(self) -> dict:
+        """Get next song from default playlist"""
+        try:
+            if not os.path.exists(config.DEFAULT_PLAYLIST_FILE):
+                return None
+            
+            with open(config.DEFAULT_PLAYLIST_FILE, 'r') as f:
+                lines = [l.strip() for l in f.readlines() if l.strip()]
+            
+            if not lines:
+                return None
+            
+            # Load playlist state
+            state = self.load_playlist_state()
+            index = state.get('current_index', 0)
+            
+            # Get song at current index
+            if index >= len(lines):
+                index = 0
+            
+            url = lines[index]
+            
+            # Update index for next time
+            state['current_index'] = (index + 1) % len(lines)
+            self.save_playlist_state(state)
+            
+            return {'url': url, 'title': 'Default Playlist Song', 'requester': 'Bot'}
+            
+        except Exception as e:
+            print(f"[Streamer] Error reading default playlist: {e}")
+            return None
+    
+    def load_playlist_state(self) -> dict:
+        """Load playlist state"""
+        try:
+            if os.path.exists(config.PLAYLIST_STATE_FILE):
+                with open(config.PLAYLIST_STATE_FILE, 'r') as f:
+                    return json.load(f)
+        except:
+            pass
+        return {'current_index': 0}
+    
+    def save_playlist_state(self, state: dict):
+        """Save playlist state"""
+        try:
+            with open(config.PLAYLIST_STATE_FILE, 'w') as f:
+                json.dump(state, f)
+        except Exception as e:
+            print(f"[Streamer] Error saving playlist state: {e}")
+    
+    async def stream_song(self, song_info: dict, is_default: bool = False):
+        """Download and stream a song"""
+        download_success = False
+        stream_success = False
+        
+        try:
+            self.is_streaming = True
+            self.current_song = song_info
+            
+            print(f"[Streamer] Processing: {song_info['title']}")
+            
+            # Update notification
+            self.update_notification(song_info)
+            
+            # Download song
+            audio_file = await self.download_song(song_info['url'], song_info['title'])
+            
+            if not audio_file:
+                print(f"[Streamer] ❌ Failed to download: {song_info['title']}")
+                if not is_default:
+                    self.log_failed(song_info)
+                    # Remove failed song from queue
+                    self.remove_from_queue()
+                return
+            
+            download_success = True
+            print(f"[Streamer] ✅ Download successful: {song_info['title']}")
+            
+            # Stream to Icecast
+            print(f"[Streamer] 🎵 Streaming: {song_info['title']}")
+            await self.stream_to_icecast(audio_file, song_info)
+            
+            stream_success = True
+            
+            print(f"[Streamer] ✅ Stream completed successfully")
+            
+            # Log to history
+            self.log_history(song_info)
+            
+            # Always remove from queue after streaming (successful or not)
+            if not is_default:
+                self.remove_from_queue()
+            
+            # Cleanup audio file
+            try:
+                os.remove(audio_file)
+                print(f"[Streamer] Cleaned up audio file")
+            except Exception as e:
+                print(f"[Streamer] Error cleaning up file: {e}")
+            
+            # Brief pause before checking for next song
+            print(f"[Streamer] ✅ Song completed, checking for next song in 2 seconds...")
+            await asyncio.sleep(2)
+                
+        except Exception as e:
+            print(f"[Streamer] ❌ Error streaming song: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            # Always remove from queue on any error to prevent infinite loops
+            if not is_default:
+                print(f"[Streamer] Removing failed song from queue")
+                self.remove_from_queue()
+                self.log_failed(song_info)
+                
+        finally:
+            self.is_streaming = False
+            self.current_song = None
+            
+            # Clear notification file when song ends
+            try:
+                if os.path.exists(config.NOTIFICATION_FILE):
+                    os.remove(config.NOTIFICATION_FILE)
+            except:
+                pass
+    
+    async def download_song(self, url: str, title: str) -> str:
+        """Download song from YouTube"""
+        try:
+            # Check cache first
+            cache_file = self.get_cache_filename(url)
+            final_file = f"{cache_file}.{config.AUDIO_FORMAT}"
+            
+            if os.path.exists(final_file):
+                print(f"[Streamer] Using cached file: {final_file}")
+                return final_file
+            
+            # Enhanced download options for better reliability
+            ydl_opts = {
+                'format': 'bestaudio[ext=m4a]/bestaudio/best',
+                'outtmpl': cache_file,
+                'quiet': False,
+                'no_warnings': False,
+                'nocheckcertificate': True,
+                'geo_bypass': True,
+                'socket_timeout': 30,
+                'retries': 3,
+                'fragment_retries': 3,
+                'extractor_args': {
+                    'youtube': {
+                        'player_client': ['android', 'web'],
+                        'skip': ['hls', 'dash']
+                    }
+                },
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': config.AUDIO_FORMAT,
+                    'preferredquality': config.AUDIO_BITRATE,
+                }],
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+            }
+            
+            print(f"[Streamer] Downloading: {title}")
+            print(f"[Streamer] URL: {url}")
+            
+            # Download synchronously in thread pool
+            loop = asyncio.get_event_loop()
+            
+            def download():
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([url])
+            
+            await loop.run_in_executor(None, download)
+            
+            # Check for downloaded file with multiple possible extensions
+            possible_files = [
+                final_file,
+                cache_file + '.mp3',
+                cache_file + '.m4a',
+                cache_file + '.webm',
+                cache_file + '.opus',
+                cache_file.replace('.webm', '.mp3'),
+                cache_file.replace('.webm', '.m4a')
+            ]
+            
+            for file_path in possible_files:
+                if os.path.exists(file_path):
+                    print(f"[Streamer] Downloaded successfully: {file_path}")
+                    return file_path
+            
+            # List cache directory to debug
+            print(f"[Streamer] Cache directory contents:")
+            if os.path.exists(config.CACHE_DIR):
+                for f in os.listdir(config.CACHE_DIR):
+                    print(f"  - {f}")
+            
+            print(f"[Streamer] Download completed but file not found")
+            return None
+            
+        except Exception as e:
+            print(f"[Streamer] Download error: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def get_cache_filename(self, url: str) -> str:
+        """Generate cache filename from URL"""
+        import hashlib
+        url_hash = hashlib.md5(url.encode()).hexdigest()[:16]
+        return os.path.join(config.CACHE_DIR, f"song_{url_hash}.webm")
+    
+    async def stream_to_icecast(self, audio_file: str, song_info: dict):
+        """Stream audio file to Icecast server"""
+        try:
+            cmd = [
+                'ffmpeg',
+                '-re',  # Real-time
+                '-i', audio_file,
+                '-acodec', 'libmp3lame',
+                '-ab', config.AUDIO_BITRATE,
+                '-ar', config.AUDIO_SAMPLE_RATE,
+                '-f', 'mp3',
+                '-content_type', 'audio/mpeg',
+                '-ice_name', song_info['title'],
+                '-ice_description', f"Requested by {song_info['requester']}",
+                config.STREAM_URL
+            ]
+            
+            self.ffmpeg_process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            
+            # Monitor for skip flag while streaming
+            while True:
+                try:
+                    # Check if skip flag exists
+                    if os.path.exists('skip_flag.txt'):
+                        print(f"[Streamer] Skip detected, terminating current song")
+                        self.ffmpeg_process.terminate()
+                        try:
+                            os.remove('skip_flag.txt')
+                        except:
+                            pass
+                        break
+                    
+                    # Check if process is still running
+                    try:
+                        return_code = await asyncio.wait_for(
+                            self.ffmpeg_process.wait(), 
+                            timeout=1.0
+                        )
+                        print(f"[Streamer] FFmpeg process completed with code: {return_code}")
+                        break
+                    except asyncio.TimeoutError:
+                        # Process still running, continue monitoring
+                        continue
+                    
+                except Exception as e:
+                    print(f"[Streamer] Error monitoring FFmpeg: {e}")
+                    break
+            
+        except Exception as e:
+            print(f"[Streamer] FFmpeg error: {e}")
+        finally:
+            self.ffmpeg_process = None
+    
+    def update_notification(self, song_info: dict):
+        """Update current song notification file"""
+        try:
+            notification = {
+                'title': song_info['title'],
+                'requester': song_info['requester'],
+                'timestamp': time.time()
+            }
+            with open(config.NOTIFICATION_FILE, 'w') as f:
+                json.dump(notification, f)
+        except Exception as e:
+            print(f"[Streamer] Error updating notification: {e}")
+    
+    def log_history(self, song_info: dict):
+        """Log song to play history"""
+        try:
+            timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+            line = f"[{timestamp}] {song_info['title']} - {song_info['requester']}\n"
+            with open(config.HISTORY_FILE, 'a') as f:
+                f.write(line)
+        except Exception as e:
+            print(f"[Streamer] Error logging history: {e}")
+    
+    def log_failed(self, song_info: dict):
+        """Log failed download"""
+        try:
+            timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+            line = f"[{timestamp}] FAILED: {song_info['title']} ({song_info['url']})\n"
+            with open(config.FAILED_FILE, 'a') as f:
+                f.write(line)
+        except Exception as e:
+            print(f"[Streamer] Error logging failure: {e}")
+
+async def main():
+    """Main entry point for streamer service"""
+    streamer = MusicStreamer()
+    await streamer.run()
+
+if __name__ == "__main__":
+    asyncio.run(main())

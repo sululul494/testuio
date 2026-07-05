@@ -1,0 +1,51 @@
+tarting Container
+RAILWAY_PROJECT_NAME=skillful-determination
+RAILWAY_BETA_ENABLE_RUNTIME_V2=1
+RAILWAY_SERVICE_ID=9afde233-1a33-4a1a-a63a-c66a87778423
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ICECAST_SOURCE_PASSWORD=joy@2007
+RAILWAY_ENVIRONMENT_NAME=production
+PWD=/
+RAILWAY_PROJECT_ID=6ed61b60-77d1-475a-9413-135a3d3401b8
+RAILWAY_SNAPSHOT_ID=7bc88fea-61cf-411d-9a5c-b2e4de9b6195
+RAILWAY_DEPLOYMENT_ID=f802a755-5f87-4556-9f52-519d8da839b1
+RAILWAY_GIT_REPO_OWNER=
+RAILWAY_SERVICE_RADIO_URL=itachihits.up.railway.app
+DEBIAN_FRONTEND=noninteractive
+set 'source-password' to 'joy@2007'
+RAILWAY_ENVIRONMENT=production
++ set_val joy@2007 source-password
+RAILWAY_ENVIRONMENT_ID=c7c799a9-e3eb-45da-8a5b-8f8d4d966516
+RAILWAY_REPLICA_REGION=sfo
+RAILWAY_REPLICA_ID=38852ec3-4038-408f-a518-6a1bae6b97a4
+HOSTNAME=47a369236112
+PORT=8080
+HOME=/root
+ICECAST_ADMIN_PASSWORD=joy@2007
+RAILWAY_SERVICE_NAME=icecast
+RAILWAY_PRIVATE_DOMAIN=icecast.railway.internal
++ echo Setting for 'relay-password' is missing, skipping.
+Setting for 'relay-password' is missing, skipping.
++ set_val joy@2007 admin-password
++ [ -n admin-password ]
++ echo set 'admin-password' to 'joy@2007'
+set 'admin-password' to 'joy@2007'
++ sed -i s/<admin-password>[^<]*<\/admin-password>/<admin-password>joy@2007<\/admin-password>/g /etc/icecast2/icecast.xml
++ set_val password
++ [ -n  ]
++ echo Setting for 'password' is missing, skipping.
+Setting for 'password' is missing, skipping.
++ set_val hostname
++ [ -n  ]
++ echo Setting for 'hostname' is missing, skipping.
+Setting for 'hostname' is missing, skipping.
++ set -e
++ sudo -Eu icecast2 icecast2 -n -c /etc/icecast2/icecast.xml
+[2026-07-01  07:41:51] WARN CONFIG/_parse_root Warning, <hostname> not configured, using default value "localhost". This will cause problems, e.g. with YP directory listings.
++ [ -n source-password ]
++ echo set 'source-password' to 'joy@2007'
++ sed -i s/<source-password>[^<]*<\/source-password>/<source-password>joy@2007<\/source-password>/g /etc/icecast2/icecast.xml
++ set_val relay-password
++ [ -n  ]
+[2026-07-01  07:41:51] WARN CONFIG/_parse_root Warning, <admin> contact not configured, using default value "icemaster@localhost".
+[2026-07-01  07:41:51] WARN CONFIG/_parse_root Warning, <location> not configured, using default value "Earth".
