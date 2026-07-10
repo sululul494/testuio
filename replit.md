@@ -1,4 +1,4 @@
-# Icecast Radio Backend
+# Icecast Radio Backends
 
 A production-grade internet radio backend that streams YouTube audio directly to a local Icecast server via FFmpeg — zero downloads, all in memory.
 
