@@ -6,7 +6,7 @@ from typing import Optional
 
 from app.autodj.manager import autodj_manager
 from app.config.settings import settings
-from app.ffmpeg.streamer import ffmpeg_streamer
+from app.audio.pipeline import audio_pipeline
 from app.icecast.connector import icecast_connector
 from app.logger.setup import get_logger
 from app.models.schemas import TrackInfo
@@ -39,6 +39,9 @@ class PlayerController:
     def start(self) -> None:
         logger.info("Player starting")
         self._stop_event.clear()
+        if not audio_pipeline.start():
+            logger.error("Audio pipeline failed to start; player will not run")
+            return
         self._player_thread = threading.Thread(
             target=self._play_loop,
             daemon=True,
@@ -49,7 +52,7 @@ class PlayerController:
     def stop(self) -> None:
         logger.info("Player stopping")
         self._stop_event.set()
-        ffmpeg_streamer.stop()
+        audio_pipeline.stop()
         if self._player_thread:
             self._player_thread.join(timeout=10)
 
@@ -58,7 +61,7 @@ class PlayerController:
         with self._lock:
             self._stats["total_skips"] += 1
         self._skip_event.set()
-        ffmpeg_streamer.stop()
+        audio_pipeline.skip_current()
 
     def is_playing(self) -> bool:
         with self._lock:
@@ -143,9 +146,9 @@ class PlayerController:
 
         icecast_connector.update_metadata(track.title)
 
-        started = ffmpeg_streamer.start(track.url, track_title=track.title)
+        started = audio_pipeline.play(track.url, track_title=track.title)
         if not started:
-            logger.error(f"FFmpeg failed to start for {track.title!r}")
+            logger.error(f"Audio pipeline failed to feed track {track.title!r}")
             with self._lock:
                 self._playing = False
                 self._stats["total_errors"] += 1
@@ -154,20 +157,12 @@ class PlayerController:
         while not self._stop_event.is_set():
             if self._skip_event.is_set():
                 logger.info(f"Skipping: {track.title!r}")
-                ffmpeg_streamer.stop()
                 break
-            if not ffmpeg_streamer.is_running():
-                exit_code = ffmpeg_streamer.wait()
-                if exit_code == 0:
-                    logger.info(f"Finished: {track.title!r}")
-                else:
-                    logger.warning(f"FFmpeg exited with code {exit_code} for {track.title!r}")
-                    with self._lock:
-                        self._stats["total_errors"] += 1
+            if audio_pipeline.wait_for_track_end(timeout=0.5):
+                logger.info(f"Finished: {track.title!r}")
                 break
             listeners = icecast_connector.get_listeners()
             self.update_peak_listeners(listeners)
-            time.sleep(0.5)
 
         with self._lock:
             self._playing = False

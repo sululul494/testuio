@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 
 from app.autodj.manager import autodj_manager
 from app.config.settings import settings
-from app.ffmpeg.streamer import ffmpeg_streamer
+from app.audio.pipeline import audio_pipeline
 from app.icecast.connector import icecast_connector
 from app.logger.setup import get_logger
 from app.models.schemas import (
@@ -314,7 +314,7 @@ async def status_endpoint() -> StatusResponse:
 @router.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     icecast_ok = icecast_connector.check_connection()
-    ffmpeg_ok = ffmpeg_streamer.is_running() or not player.is_playing()
+    ffmpeg_ok = audio_pipeline.is_encoder_running() or not player.is_playing()
     queue_ok = queue_manager.is_alive()
     player_ok = player.is_alive()
     api_ok = True
