@@ -158,6 +158,11 @@ class PlayerController:
             if self._skip_event.is_set():
                 logger.info(f"Skipping: {track.title!r}")
                 break
+            if audio_pipeline.has_error():
+                logger.error(f"Audio pipeline error while playing {track.title!r}")
+                with self._lock:
+                    self._stats["total_errors"] += 1
+                break
             if audio_pipeline.wait_for_track_end(timeout=0.5):
                 logger.info(f"Finished: {track.title!r}")
                 break

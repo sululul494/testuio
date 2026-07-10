@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import queue
 import subprocess
 import threading
 import time
@@ -11,6 +12,7 @@ from app.logger.setup import get_logger
 logger = get_logger("pipeline")
 
 CHUNK_SIZE = 4096
+PCM_QUEUE_MAXSIZE = 128
 
 
 class AudioEncoder:
@@ -253,41 +255,54 @@ class TrackDecoder:
 
 
 class AudioPipeline:
-    """Persistent Icecast stream with seamless track-to-track handoff."""
+    """Persistent Icecast stream with seamless track-to-track handoff.
+
+    One encoder stays connected to Icecast for the whole session. Decoders are
+    swapped per track. A bounded PCM queue between the decoder reader thread and
+    the encoder writer thread absorbs jitter and provides clean backpressure.
+    """
 
     def __init__(self) -> None:
         self._encoder = AudioEncoder()
         self._decoder: Optional[TrackDecoder] = None
-        self._bridge_thread: Optional[threading.Thread] = None
+        self._pcm_queue: queue.Queue = queue.Queue(maxsize=PCM_QUEUE_MAXSIZE)
+        self._decoder_reader_thread: Optional[threading.Thread] = None
+        self._encoder_writer_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
         self._track_finished = threading.Event()
+        self._encoder_error = threading.Event()
         self._lock = threading.Lock()
         self._current_title: str = ""
+        self._generation: int = 0
 
     def start(self) -> bool:
         self._stop_event.clear()
+        self._encoder_error.clear()
         if not self._encoder.start():
             return False
-        self._bridge_thread = threading.Thread(
-            target=self._bridge_loop,
+        self._encoder_writer_thread = threading.Thread(
+            target=self._encoder_writer_loop,
             daemon=True,
-            name="audio-bridge",
+            name="audio-encoder-writer",
         )
-        self._bridge_thread.start()
+        self._encoder_writer_thread.start()
         return True
 
     def stop(self) -> None:
         self._stop_event.set()
         self._stop_decoder()
-        if self._bridge_thread and self._bridge_thread.is_alive():
-            self._bridge_thread.join(timeout=5)
+        # Closing encoder stdin unblocks any pending writer write.
         self._encoder.stop()
+        if self._encoder_writer_thread and self._encoder_writer_thread.is_alive():
+            self._encoder_writer_thread.join(timeout=5)
 
     def play(self, audio_url: str, track_title: str) -> bool:
-        self._track_finished.clear()
-        with self._lock:
-            self._current_title = track_title
         self._stop_decoder()
+        self._track_finished.clear()
+        self._encoder_error.clear()
+        with self._lock:
+            self._generation += 1
+            self._current_title = track_title
         decoder = TrackDecoder(audio_url, track_title)
         if not decoder.start():
             logger.error(f"Failed to start track decoder for {track_title!r}")
@@ -295,6 +310,13 @@ class AudioPipeline:
             return False
         with self._lock:
             self._decoder = decoder
+        self._decoder_reader_thread = threading.Thread(
+            target=self._decoder_reader_loop,
+            daemon=True,
+            args=(decoder, self._generation, track_title),
+            name="audio-decoder-reader",
+        )
+        self._decoder_reader_thread.start()
         logger.info(f"Now feeding: {track_title!r}")
         return True
 
@@ -308,40 +330,86 @@ class AudioPipeline:
     def is_encoder_running(self) -> bool:
         return self._encoder.is_running()
 
+    def has_error(self) -> bool:
+        return self._encoder_error.is_set()
+
     def _stop_decoder(self) -> None:
         with self._lock:
             decoder = self._decoder
             self._decoder = None
         if decoder:
             decoder.stop()
+        # Discard any buffered PCM from the previous track so the writer picks
+        # up the new stream immediately after a skip or song change.
+        self._drain_queue()
 
-    def _bridge_loop(self) -> None:
+    def _drain_queue(self) -> None:
+        while not self._pcm_queue.empty():
+            try:
+                self._pcm_queue.get_nowait()
+            except queue.Empty:
+                break
+
+    def _decoder_reader_loop(
+        self,
+        decoder: TrackDecoder,
+        generation: int,
+        title: str,
+    ) -> None:
+        """Read decoded PCM from the decoder and feed the bounded queue."""
         while not self._stop_event.is_set():
             with self._lock:
-                decoder = self._decoder
+                still_active = (
+                    self._generation == generation and self._decoder is decoder
+                )
+            if not still_active:
+                break
 
-            if decoder is None:
-                time.sleep(0.05)
-                continue
+            try:
+                chunk = decoder.read(CHUNK_SIZE)
+            except Exception:
+                break
 
-            chunk = decoder.read(CHUNK_SIZE)
             if chunk:
-                self._encoder.write(chunk)
+                while not self._stop_event.is_set():
+                    with self._lock:
+                        still_active = (
+                            self._generation == generation and self._decoder is decoder
+                        )
+                    if not still_active:
+                        break
+                    try:
+                        self._pcm_queue.put(chunk, timeout=1.0)
+                        break
+                    except queue.Full:
+                        # Encoder is slow; retry while this track is still active.
+                        continue
                 continue
 
-            # No data returned; check if decoder finished
             if not decoder.is_running():
-                # End of track
-                title = ""
-                with self._lock:
-                    title = self._current_title
-                    self._decoder = None
-                logger.info(f"Track decoder finished: {title!r}")
-                self._track_finished.set()
-                continue
-
-            # Decoder still running but no data yet; brief wait
+                break
             time.sleep(0.001)
+
+        # Only mark the track as finished if this decoder is still the active one.
+        with self._lock:
+            if self._decoder is decoder and self._generation == generation:
+                self._decoder = None
+                self._track_finished.set()
+                logger.info(f"Track decoder finished: {title!r}")
+
+    def _encoder_writer_loop(self) -> None:
+        """Pull PCM from the queue and write to the persistent encoder."""
+        while not self._stop_event.is_set():
+            try:
+                chunk = self._pcm_queue.get(timeout=0.5)
+            except queue.Empty:
+                continue
+            if not chunk:
+                continue
+            if not self._encoder.write(chunk):
+                logger.error("Audio encoder write failed; pipeline entering error state")
+                self._encoder_error.set()
+                break
 
 
 audio_pipeline = AudioPipeline()
