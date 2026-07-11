@@ -398,7 +398,15 @@ class AudioPipeline:
                 logger.info(f"Track decoder finished: {title!r}")
 
     def _encoder_writer_loop(self) -> None:
-        """Pull PCM from the queue and write to the persistent encoder."""
+        """Pull PCM from the queue and write to the persistent encoder.
+
+        A single write failure (e.g. a transient Icecast hiccup that kills the
+        ffmpeg encoder process) must not end this loop permanently — that would
+        silently stop the entire broadcast while the rest of the app keeps
+        cycling tracks as if nothing were wrong. Instead, restart the encoder
+        in place and keep going.
+        """
+        consecutive_failures = 0
         while not self._stop_event.is_set():
             try:
                 chunk = self._pcm_queue.get(timeout=0.5)
@@ -406,10 +414,26 @@ class AudioPipeline:
                 continue
             if not chunk:
                 continue
-            if not self._encoder.write(chunk):
-                logger.error("Audio encoder write failed; pipeline entering error state")
-                self._encoder_error.set()
+            if self._encoder.write(chunk):
+                consecutive_failures = 0
+                continue
+
+            consecutive_failures += 1
+            logger.error(
+                "Audio encoder write failed (attempt "
+                f"{consecutive_failures}); restarting encoder and reconnecting to Icecast"
+            )
+            self._encoder_error.set()
+            if self._stop_event.is_set():
                 break
+            # Back off a little longer after repeated failures so we don't
+            # hammer Icecast in a tight crash loop.
+            time.sleep(min(1.0 * consecutive_failures, 10.0))
+            if not self._encoder.start():
+                logger.error("Audio encoder restart failed; will retry")
+                continue
+            logger.info("Audio encoder restarted; resuming broadcast")
+            self._encoder_error.clear()
 
 
 audio_pipeline = AudioPipeline()
