@@ -65,6 +65,41 @@ class SkippableError(ExtractionError):
     pass
 
 
+class RateLimitError(ExtractionError):
+    """YouTube/IP rate limit or bot block; caller should back off globally."""
+    pass
+
+
+# Global cooldown state for YouTube bot/rate-limit detection.
+# Shared across extractor instances so rapid-fire AutoDJ retries don't
+# keep hammering YouTube while the block is active.
+_youtube_cooldown_until: float = 0.0
+_YOUTUBE_COOLDOWN_SECONDS: float = 60.0
+_MAX_BACKOFF_SECONDS: float = 300.0
+
+
+def _set_youtube_cooldown(seconds: Optional[float] = None) -> None:
+    global _youtube_cooldown_until
+    seconds = seconds or _YOUTUBE_COOLDOWN_SECONDS
+    _youtube_cooldown_until = time.monotonic() + seconds
+    logger.warning(f"YouTube rate-limit/bot detection; cooling down for {seconds:.0f}s")
+
+
+def _is_youtube_cooldown_active() -> bool:
+    return time.monotonic() < _youtube_cooldown_until
+
+
+def _youtube_cooldown_remaining() -> float:
+    return max(0.0, _youtube_cooldown_until - time.monotonic())
+
+
+def _maybe_apply_youtube_backoff(msg: str) -> None:
+    msg_lower = msg.lower()
+    if any(k in msg_lower for k in ("429", "too many requests", "sign in", "bot", "confirm you're not a bot")):
+        remaining = _youtube_cooldown_remaining()
+        _set_youtube_cooldown(min(remaining + _YOUTUBE_COOLDOWN_SECONDS, _MAX_BACKOFF_SECONDS))
+
+
 class YouTubeExtractor:
     def __init__(self) -> None:
         self._base_opts: Dict[str, Any] = {
@@ -100,16 +135,26 @@ class YouTubeExtractor:
 
     def extract_info(self, url: str, requested_by: str = "API") -> TrackInfo:
         logger.info(f"Extracting info for: {url!r}")
+
+        if _is_youtube_cooldown_active():
+            remaining = _youtube_cooldown_remaining()
+            logger.warning(f"YouTube cooldown active ({remaining:.0f}s left); skipping extraction")
+            raise RateLimitError(f"YouTube cooldown active for {remaining:.0f}s")
+
         try:
             with self._ydl() as ydl:
                 info = ydl.extract_info(url, download=False)
         except yt_dlp.utils.DownloadError as exc:
             msg = str(exc).lower()
             logger.warning(f"yt-dlp DownloadError for {url!r}: {msg[:200]}")
-            # Try Invidious fallback on bot/403 errors
+            _maybe_apply_youtube_backoff(msg)
+            if _is_youtube_cooldown_active():
+                raise RateLimitError(f"YouTube rate-limit/bot block for {url!r}")
+            # Try Invidious fallback on bot/403 errors only when not rate-limited
             if "bot" in msg or "403" in msg or "sign in" in msg:
                 track = self._invidious_fallback(url, requested_by)
                 if track:
+                    _youtube_cooldown_until = 0.0  # fallback worked; clear cooldown
                     return track
             self._raise_for_message(msg, url)
             raise ExtractionError(f"yt-dlp error for {url!r}: {exc}") from exc
@@ -154,6 +199,11 @@ class YouTubeExtractor:
 
     def extract_playlist_urls(self, playlist_url: str) -> list[str]:
         logger.info(f"Expanding playlist: {playlist_url!r}")
+        if _is_youtube_cooldown_active():
+            remaining = _youtube_cooldown_remaining()
+            logger.warning(f"YouTube cooldown active ({remaining:.0f}s left); skipping playlist expansion")
+            return []
+
         opts = dict(self._base_opts)
         opts.update({
             "extract_flat": True,
@@ -166,6 +216,11 @@ class YouTubeExtractor:
         try:
             with self._ydl(opts) as ydl:
                 info = ydl.extract_info(playlist_url, download=False)
+        except yt_dlp.utils.DownloadError as exc:
+            msg = str(exc).lower()
+            _maybe_apply_youtube_backoff(msg)
+            logger.error(f"Failed to expand playlist {playlist_url!r}: {exc}")
+            return []
         except Exception as exc:
             logger.error(f"Failed to expand playlist {playlist_url!r}: {exc}", exc_info=True)
             return []

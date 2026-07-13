@@ -8,7 +8,7 @@ from typing import Iterator, List, Optional
 from app.config.settings import settings
 from app.logger.setup import get_logger
 from app.models.schemas import TrackInfo
-from app.youtube.extractor import ExtractionError, SkippableError, extractor
+from app.youtube.extractor import ExtractionError, RateLimitError, SkippableError, extractor
 
 logger = get_logger("autodj")
 
@@ -66,6 +66,10 @@ class AutoDJManager:
                 track = extractor.extract_info(url, requested_by="AutoDJ")
                 logger.info(f"AutoDJ selected: {track.title!r}")
                 return track
+            except RateLimitError as exc:
+                logger.warning(f"AutoDJ rate-limited for {url!r}: {exc}")
+                # Stop retrying immediately; caller should back off and play silence.
+                return None
             except SkippableError as exc:
                 logger.warning(f"AutoDJ skipping {url!r}: {exc}")
                 time.sleep(2)

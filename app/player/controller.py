@@ -105,10 +105,19 @@ class PlayerController:
             self._skip_event.clear()
             track = self._get_next_track()
             if track is None:
-                logger.warning("No track available; waiting 5 seconds")
-                time.sleep(5)
-                continue
+                logger.warning("No track available; playing silence to keep stream alive")
+                track = self._silence_track()
             self._play_track(track)
+
+    def _silence_track(self) -> TrackInfo:
+        return TrackInfo(
+            position=0,
+            title="Buffering... searching for next track",
+            duration="0:30",
+            url="lavfi:anullsrc=r=44100:cl=stereo:d=30",
+            thumbnail="",
+            requested_by="system",
+        )
 
     def _get_next_track(self) -> Optional[TrackInfo]:
         next_queued = queue_manager.pop_next()
