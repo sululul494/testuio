@@ -106,6 +106,8 @@ class PlayerController:
             track = self._get_next_track()
             if track is None:
                 logger.warning("No track available; playing silence to keep stream alive")
+                with self._lock:
+                    self._is_autodj = False
                 track = self._silence_track()
             self._play_track(track)
 
@@ -143,15 +145,19 @@ class PlayerController:
 
     def _play_track(self, track: TrackInfo) -> None:
         logger.info(f"Now playing: {track.title!r}")
+        # Generated silence decodes at machine speed, so we must hold the loop
+        # for its intended real-time duration rather than wait for the decoder.
+        is_silence = track.url == "lavfi:anullsrc=r=44100:cl=stereo:d=30"
         with self._lock:
             self._current_track = track
             self._track_started_at = time.monotonic()
             self._playing = True
-            self._stats["total_played"] += 1
-            if self._is_autodj:
-                self._stats["autodj_played"] += 1
-            else:
-                self._stats["user_played"] += 1
+            if not is_silence:
+                self._stats["total_played"] += 1
+                if self._is_autodj:
+                    self._stats["autodj_played"] += 1
+                else:
+                    self._stats["user_played"] += 1
 
         icecast_connector.update_metadata(track.title)
 
@@ -163,6 +169,8 @@ class PlayerController:
                 self._stats["total_errors"] += 1
             return
 
+        silence_deadline = time.monotonic() + 30.0 if is_silence else None
+
         while not self._stop_event.is_set():
             if self._skip_event.is_set():
                 logger.info(f"Skipping: {track.title!r}")
@@ -172,7 +180,10 @@ class PlayerController:
                 with self._lock:
                     self._stats["total_errors"] += 1
                 break
-            if audio_pipeline.wait_for_track_end(timeout=0.5):
+            if is_silence and time.monotonic() >= silence_deadline:
+                logger.info(f"Finished: {track.title!r}")
+                break
+            if not is_silence and audio_pipeline.wait_for_track_end(timeout=0.5):
                 logger.info(f"Finished: {track.title!r}")
                 break
             listeners = icecast_connector.get_listeners()
