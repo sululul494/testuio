@@ -175,8 +175,12 @@ class PlayerController:
             if self._skip_event.is_set():
                 logger.info(f"Skipping: {track.title!r}")
                 break
-            if audio_pipeline.has_error():
-                logger.error(f"Audio pipeline error while playing {track.title!r}")
+            # The encoder writer loop handles transient errors itself. The player
+            # should only give up on a real track if the encoder has been stuck
+            # for a long time. Silence tracks must never be aborted, because they
+            # are the bridge that keeps the stream alive while the encoder recovers.
+            if not is_silence and audio_pipeline.is_encoder_stuck(threshold=30.0):
+                logger.error(f"Audio pipeline stuck while playing {track.title!r}")
                 with self._lock:
                     self._stats["total_errors"] += 1
                 break

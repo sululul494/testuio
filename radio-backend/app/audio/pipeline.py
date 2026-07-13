@@ -271,6 +271,7 @@ class AudioPipeline:
         self._stop_event = threading.Event()
         self._track_finished = threading.Event()
         self._encoder_error = threading.Event()
+        self._encoder_error_time: Optional[float] = None
         self._lock = threading.Lock()
         self._current_title: str = ""
         self._generation: int = 0
@@ -332,6 +333,18 @@ class AudioPipeline:
 
     def has_error(self) -> bool:
         return self._encoder_error.is_set()
+
+    def is_encoder_stuck(self, threshold: float = 30.0) -> bool:
+        """Return True only when the encoder has been down for a long time.
+
+        Transient write failures are handled by the writer loop itself; the
+        caller should only give up on a track if the encoder has failed to
+        recover for several seconds.
+        """
+        with self._lock:
+            if self._encoder_error_time is None:
+                return False
+            return (time.monotonic() - self._encoder_error_time) > threshold
 
     def _stop_decoder(self) -> None:
         with self._lock:
@@ -416,6 +429,11 @@ class AudioPipeline:
                 continue
             if self._encoder.write(chunk):
                 consecutive_failures = 0
+                # A successful write means the encoder is alive; clear any
+                # lingering error state so callers don't panic over an old hiccup.
+                with self._lock:
+                    self._encoder_error_time = None
+                self._encoder_error.clear()
                 continue
 
             consecutive_failures += 1
@@ -424,6 +442,9 @@ class AudioPipeline:
                 f"{consecutive_failures}); restarting encoder and reconnecting to Icecast"
             )
             self._encoder_error.set()
+            with self._lock:
+                if self._encoder_error_time is None:
+                    self._encoder_error_time = time.monotonic()
             if self._stop_event.is_set():
                 break
             # Back off a little longer after repeated failures so we don't
@@ -433,6 +454,8 @@ class AudioPipeline:
                 logger.error("Audio encoder restart failed; will retry")
                 continue
             logger.info("Audio encoder restarted; resuming broadcast")
+            with self._lock:
+                self._encoder_error_time = None
             self._encoder_error.clear()
 
 
