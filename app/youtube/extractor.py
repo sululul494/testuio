@@ -127,6 +127,10 @@ class YouTubeExtractor:
             self._base_opts["cookies"] = COOKIES_PATH
             logger.info("Using YouTube cookies from %s", COOKIES_PATH)
 
+        if settings.proxy_url:
+            self._base_opts["proxy"] = settings.proxy_url
+            logger.info("Using proxy for yt-dlp: %s", settings.proxy_url)
+
     def _ydl(self, extra: Optional[Dict[str, Any]] = None) -> yt_dlp.YoutubeDL:
         opts = dict(self._base_opts)
         if extra:
