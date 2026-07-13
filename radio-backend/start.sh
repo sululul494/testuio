@@ -32,7 +32,7 @@ export ICECAST_MOUNT="/stream"
 export ICECAST_PASSWORD="${ICECAST_INTERNAL_PASS}"
 export ICECAST_NAME="Itachi Hits Radio"
 export ICECAST_DESCRIPTION="Live internet radio stream"
-export ICECAST_PUBLIC="0"
+export ICECAST_PUBLIC="${ICECAST_PUBLIC:-1}"
 
 echo "[start.sh] Configuring Icecast (internal credentials generated)..."
 
@@ -61,9 +61,11 @@ if "<mount-name>/stream" not in src:
         <password>___MOUNT_SOURCE_PASS___</password>
         <max-listeners>1000</max-listeners>
         <burst-size>65536</burst-size>
+        <public>___PUBLIC___</public>
     </mount>
 """
     mount_block = mount_block.replace("___MOUNT_SOURCE_PASS___", sp)
+    mount_block = mount_block.replace("___PUBLIC___", "1" if "${ICECAST_PUBLIC}" == "1" else "0")
     src = src.replace("</icecast>", f"{mount_block}</icecast>")
 
 open(path, "w").write(src)
