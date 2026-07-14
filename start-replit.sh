@@ -3,6 +3,14 @@ set -euo pipefail
 
 cd /home/runner/workspace
 
+# Load .env if present (local credentials file, gitignored)
+if [ -f .env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env
+  set +a
+fi
+
 echo "========================================"
 echo "  Icecast Radio Backend — Replit"
 echo "========================================"
