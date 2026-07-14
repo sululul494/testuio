@@ -19,15 +19,33 @@ logger = get_logger("ytdlp")
 COOKIES_PATH = "/tmp/youtube_cookies.txt"
 
 
+_COOKIES_B64_FILE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "cookies_b64.txt",
+)
+
+
 def _write_cookies() -> None:
-    """Decode base64 cookies from env and write to a netscape cookies file for yt-dlp."""
-    if not settings.youtube_cookies_b64:
+    """Decode base64 cookies from env (or cookies_b64.txt fallback) and write for yt-dlp."""
+    raw_b64: str | None = settings.youtube_cookies_b64
+
+    # Fall back to the committed cookies_b64.txt file if the env var isn't set
+    if not raw_b64 and os.path.exists(_COOKIES_B64_FILE):
+        try:
+            raw_b64 = open(_COOKIES_B64_FILE, "r", encoding="utf-8").read().strip()
+            logger.info("YOUTUBE_COOKIES_B64 not set; loaded cookies from cookies_b64.txt")
+        except Exception as exc:
+            logger.error(f"Failed to read cookies_b64.txt: {exc}")
+
+    if not raw_b64:
+        logger.warning("No YouTube cookies available (env var not set, cookies_b64.txt missing)")
         return
+
     try:
-        raw = base64.b64decode(settings.youtube_cookies_b64).decode("utf-8", errors="replace")
+        raw = base64.b64decode(raw_b64).decode("utf-8", errors="replace")
         with open(COOKIES_PATH, "w", encoding="utf-8") as f:
             f.write(raw)
-        logger.info("YouTube cookies file written")
+        logger.info("YouTube cookies file written to %s", COOKIES_PATH)
     except Exception as exc:
         logger.error(f"Failed to write YouTube cookies: {exc}")
 
