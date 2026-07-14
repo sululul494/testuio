@@ -252,7 +252,11 @@ async def now_playing() -> NowPlayingResponse:
     track = player.get_current_track()
     elapsed = player.elapsed_seconds()
 
-    if track is None:
+    # Treat the silence/buffering track as "nothing playing" so bots
+    # and UIs never surface "Buffering... searching for next track".
+    is_silence = track is not None and track.url == "lavfi:anullsrc=r=44100:cl=stereo:d=30"
+
+    if track is None or is_silence:
         return NowPlayingResponse(
             title="Nothing playing",
             channel="",
