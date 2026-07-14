@@ -159,7 +159,10 @@ class PlayerController:
                 else:
                     self._stats["user_played"] += 1
 
-        icecast_connector.update_metadata(track.title)
+        # During silence gaps, keep the last song title on Icecast rather than
+        # broadcasting "Buffering... searching for next track" to listeners.
+        if not is_silence:
+            icecast_connector.update_metadata(track.title)
 
         started = audio_pipeline.play(track.url, track_title=track.title)
         if not started:
