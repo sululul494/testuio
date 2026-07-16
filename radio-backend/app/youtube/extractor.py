@@ -92,13 +92,13 @@ class RateLimitError(ExtractionError):
 # Shared across extractor instances so rapid-fire AutoDJ retries don't
 # keep hammering YouTube while the block is active.
 _youtube_cooldown_until: float = 0.0
+_consecutive_bot_blocks: int = 0   # tracks unbroken run of bot-blocks for backoff
 _YOUTUBE_COOLDOWN_SECONDS: float = 60.0
-_MAX_BACKOFF_SECONDS: float = 300.0
+_MAX_BACKOFF_SECONDS: float = 600.0  # 10 min hard cap
 
 
-def _set_youtube_cooldown(seconds: Optional[float] = None) -> None:
+def _set_youtube_cooldown(seconds: float) -> None:
     global _youtube_cooldown_until
-    seconds = seconds or _YOUTUBE_COOLDOWN_SECONDS
     _youtube_cooldown_until = time.monotonic() + seconds
     logger.warning(f"YouTube rate-limit/bot detection; cooling down for {seconds:.0f}s")
 
@@ -112,10 +112,21 @@ def _youtube_cooldown_remaining() -> float:
 
 
 def _maybe_apply_youtube_backoff(msg: str) -> None:
+    """Apply exponential backoff on bot/rate-limit errors."""
+    global _consecutive_bot_blocks
     msg_lower = msg.lower()
     if any(k in msg_lower for k in ("429", "too many requests", "sign in", "bot", "confirm you're not a bot")):
-        remaining = _youtube_cooldown_remaining()
-        _set_youtube_cooldown(min(remaining + _YOUTUBE_COOLDOWN_SECONDS, _MAX_BACKOFF_SECONDS))
+        _consecutive_bot_blocks += 1
+        # Exponential: 60s → 120s → 240s → 480s → 600s (cap)
+        backoff = min(_YOUTUBE_COOLDOWN_SECONDS * (2 ** (_consecutive_bot_blocks - 1)), _MAX_BACKOFF_SECONDS)
+        _set_youtube_cooldown(backoff)
+
+
+def _clear_youtube_cooldown() -> None:
+    """Call when a fallback/recovery succeeds to reset backoff state."""
+    global _youtube_cooldown_until, _consecutive_bot_blocks
+    _youtube_cooldown_until = 0.0
+    _consecutive_bot_blocks = 0
 
 
 class YouTubeExtractor:
@@ -169,15 +180,17 @@ class YouTubeExtractor:
         except yt_dlp.utils.DownloadError as exc:
             msg = str(exc).lower()
             logger.warning(f"yt-dlp DownloadError for {url!r}: {msg[:200]}")
-            _maybe_apply_youtube_backoff(msg)
-            if _is_youtube_cooldown_active():
-                raise RateLimitError(f"YouTube rate-limit/bot block for {url!r}")
-            # Try Invidious fallback on bot/403 errors only when not rate-limited
-            if "bot" in msg or "403" in msg or "sign in" in msg:
+            is_bot_block = any(k in msg for k in ("sign in", "bot", "confirm you're not a bot", "429", "too many requests"))
+            if is_bot_block:
+                # Try Invidious FIRST, before setting the cooldown.
+                # If it works we avoid the silence gap entirely.
                 track = self._invidious_fallback(url, requested_by)
                 if track:
-                    _youtube_cooldown_until = 0.0  # fallback worked; clear cooldown
+                    _clear_youtube_cooldown()
                     return track
+                # Invidious also failed — now apply exponential backoff.
+                _maybe_apply_youtube_backoff(msg)
+                raise RateLimitError(f"YouTube rate-limit/bot block for {url!r}")
             self._raise_for_message(msg, url)
             raise ExtractionError(f"yt-dlp error for {url!r}: {exc}") from exc
         except Exception as exc:
