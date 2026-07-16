@@ -194,27 +194,61 @@ async def stream_proxy(request: Request) -> StreamingResponse:
     """Proxy the Icecast stream with iOS-compatible headers.
 
     iOS Safari / AVFoundation cannot speak the ICY protocol and cannot reach
-    Icecast directly on port 8000. This endpoint forwards the raw audio bytes
-    over standard HTTP so any client can listen via the FastAPI port.
+    Icecast on port 8000. This endpoint forwards raw audio bytes over standard
+    HTTP/1.1 chunked transfer so any client — including iOS — can tune in.
+
+    The blocking requests.get() runs in a daemon thread; chunks are handed to
+    the async generator via an asyncio.Queue so the event loop is never blocked.
     """
     icecast_url = (
         f"http://{settings.icecast_host}:{settings.icecast_port}{settings.icecast_mount}"
     )
 
-    def _generate():
+    async def _generate():
+        import threading
+
+        loop = asyncio.get_event_loop()
+        q: asyncio.Queue = asyncio.Queue(maxsize=32)
+        _SENTINEL = object()
+
+        def _fetch() -> None:
+            try:
+                with _requests.get(
+                    icecast_url,
+                    stream=True,
+                    headers={"Icy-MetaData": "0"},
+                    timeout=(10, None),
+                ) as resp:
+                    if resp.status_code != 200:
+                        logger.warning(f"Icecast returned {resp.status_code}")
+                        return
+                    for chunk in resp.iter_content(chunk_size=8192):
+                        if chunk:
+                            asyncio.run_coroutine_threadsafe(q.put(chunk), loop).result(timeout=10)
+            except Exception as exc:
+                logger.warning(f"Stream proxy fetch error: {exc}")
+            finally:
+                try:
+                    asyncio.run_coroutine_threadsafe(q.put(_SENTINEL), loop).result(timeout=5)
+                except Exception:
+                    pass
+
+        thread = threading.Thread(target=_fetch, daemon=True, name="stream-proxy")
+        thread.start()
         try:
-            with _requests.get(
-                icecast_url,
-                stream=True,
-                headers={"Icy-MetaData": "0"},  # disable ICY metadata bytes in stream
-                timeout=(10, None),
-            ) as resp:
-                resp.raise_for_status()
-                for chunk in resp.iter_content(chunk_size=8192):
-                    if chunk:
-                        yield chunk
-        except Exception as exc:
-            logger.warning(f"Stream proxy error: {exc}")
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    chunk = await asyncio.wait_for(q.get(), timeout=15)
+                except asyncio.TimeoutError:
+                    logger.warning("Stream proxy: no data from Icecast for 15s")
+                    break
+                if chunk is _SENTINEL:
+                    break
+                yield chunk
+        finally:
+            thread.join(timeout=3)
 
     return StreamingResponse(
         _generate(),
