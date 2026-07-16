@@ -5,9 +5,10 @@ import time
 from pathlib import Path
 from typing import Any, Dict
 
+import requests as _requests
 import psutil
-from fastapi import APIRouter, Depends, Header, HTTPException, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.autodj.manager import autodj_manager
 from app.config.settings import settings
@@ -186,6 +187,49 @@ async def test_tone() -> dict:
     ]
     asyncio.create_task(_run_test_tone(cmd))
     return {"success": True, "message": "60-second test tone streaming to /stream"}
+
+
+@router.get("/stream")
+async def stream_proxy(request: Request) -> StreamingResponse:
+    """Proxy the Icecast stream with iOS-compatible headers.
+
+    iOS Safari / AVFoundation cannot speak the ICY protocol and cannot reach
+    Icecast directly on port 8000. This endpoint forwards the raw audio bytes
+    over standard HTTP so any client can listen via the FastAPI port.
+    """
+    icecast_url = (
+        f"http://{settings.icecast_host}:{settings.icecast_port}{settings.icecast_mount}"
+    )
+
+    def _generate():
+        try:
+            with _requests.get(
+                icecast_url,
+                stream=True,
+                headers={"Icy-MetaData": "0"},  # disable ICY metadata bytes in stream
+                timeout=(10, None),
+            ) as resp:
+                resp.raise_for_status()
+                for chunk in resp.iter_content(chunk_size=8192):
+                    if chunk:
+                        yield chunk
+        except Exception as exc:
+            logger.warning(f"Stream proxy error: {exc}")
+
+    return StreamingResponse(
+        _generate(),
+        media_type="audio/mpeg",
+        headers={
+            "Accept-Ranges": "none",
+            "Cache-Control": "no-cache, no-store",
+            "Connection": "keep-alive",
+            "X-Content-Type-Options": "nosniff",
+            "Access-Control-Allow-Origin": "*",
+            "icy-name": "Itachi Hits Radio",
+            "icy-genre": "Mixed",
+            "icy-br": str(settings.audio_bitrate),
+        },
+    )
 
 
 @router.post("/play", response_model=PlayResponse)
