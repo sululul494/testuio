@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from pathlib import Path
 from typing import Any, Dict
@@ -31,7 +32,7 @@ from app.models.schemas import (
 )
 from app.player.controller import player
 from app.queue.manager import queue_manager
-from app.youtube.extractor import ExtractionError, SkippableError, extractor
+from app.youtube.extractor import ExtractionError, OAUTH2_TOKEN_CACHE_FILE, SkippableError, extractor
 
 logger = get_logger("api")
 router = APIRouter()
@@ -53,6 +54,9 @@ async def debug_env() -> dict:
     return {
         "youtube_cookies_b64_set": has_cookies,
         "youtube_cookies_b64_length": len(settings.youtube_cookies_b64) if has_cookies else 0,
+        "youtube_oauth2_token_b64_set": bool(settings.youtube_oauth2_token_b64),
+        "youtube_oauth2_token_b64_length": len(settings.youtube_oauth2_token_b64) if settings.youtube_oauth2_token_b64 else 0,
+        "youtube_oauth2_cache_file_present": os.path.exists(OAUTH2_TOKEN_CACHE_FILE),
         "ytdlp_format": settings.ytdlp_format,
         "ytdlp_timeout": settings.ytdlp_timeout,
     }
@@ -194,42 +198,55 @@ async def stream_proxy(request: Request) -> StreamingResponse:
     """Proxy the Icecast stream with iOS-compatible headers.
 
     iOS Safari / AVFoundation cannot speak the ICY protocol and cannot reach
-    Icecast on port 8000. This endpoint forwards raw audio bytes over standard
-    HTTP/1.1 chunked transfer so any client — including iOS — can tune in.
+    Icecast on port 8000 directly. This endpoint re-serves the raw MP3 bytes
+    over plain HTTP/1.1 chunked transfer — no ICY metadata injected — so any
+    client including iOS can tune in.
 
-    The blocking requests.get() runs in a daemon thread; chunks are handed to
-    the async generator via an asyncio.Queue so the event loop is never blocked.
+    Architecture: a daemon thread owns the blocking requests.get() call and
+    pushes raw bytes into an asyncio.Queue; the async generator drains it on
+    the event loop side. A stop Event lets the generator signal the thread to
+    quit early when the client disconnects.
     """
+    import threading
+
     icecast_url = (
         f"http://{settings.icecast_host}:{settings.icecast_port}{settings.icecast_mount}"
     )
 
     async def _generate():
-        import threading
-
         loop = asyncio.get_event_loop()
-        q: asyncio.Queue = asyncio.Queue(maxsize=32)
-        _SENTINEL = object()
+        q: asyncio.Queue[bytes | None] = asyncio.Queue(maxsize=64)
+        stop = threading.Event()
 
         def _fetch() -> None:
             try:
                 with _requests.get(
                     icecast_url,
                     stream=True,
-                    headers={"Icy-MetaData": "0"},
+                    headers={
+                        "Icy-MetaData": "0",
+                        "User-Agent": "IcecastProxy/1.0",
+                    },
                     timeout=(10, None),
                 ) as resp:
                     if resp.status_code != 200:
-                        logger.warning(f"Icecast returned {resp.status_code}")
+                        logger.warning(f"Stream proxy: Icecast returned {resp.status_code}")
                         return
-                    for chunk in resp.iter_content(chunk_size=8192):
+                    for chunk in resp.iter_content(chunk_size=4096):
+                        if stop.is_set():
+                            break
                         if chunk:
-                            asyncio.run_coroutine_threadsafe(q.put(chunk), loop).result(timeout=10)
+                            fut = asyncio.run_coroutine_threadsafe(q.put(chunk), loop)
+                            try:
+                                fut.result(timeout=15)
+                            except Exception:
+                                break
             except Exception as exc:
-                logger.warning(f"Stream proxy fetch error: {exc}")
+                if not stop.is_set():
+                    logger.warning(f"Stream proxy fetch error: {exc}")
             finally:
                 try:
-                    asyncio.run_coroutine_threadsafe(q.put(_SENTINEL), loop).result(timeout=5)
+                    asyncio.run_coroutine_threadsafe(q.put(None), loop).result(timeout=5)
                 except Exception:
                     pass
 
@@ -237,18 +254,19 @@ async def stream_proxy(request: Request) -> StreamingResponse:
         thread.start()
         try:
             while True:
-                if await request.is_disconnected():
-                    break
                 try:
-                    chunk = await asyncio.wait_for(q.get(), timeout=15)
+                    chunk = await asyncio.wait_for(q.get(), timeout=20)
                 except asyncio.TimeoutError:
-                    logger.warning("Stream proxy: no data from Icecast for 15s")
+                    logger.warning("Stream proxy: Icecast silent for 20s — closing")
                     break
-                if chunk is _SENTINEL:
+                if chunk is None:
                     break
                 yield chunk
+                if await request.is_disconnected():
+                    break
         finally:
-            thread.join(timeout=3)
+            stop.set()
+            thread.join(timeout=5)
 
     return StreamingResponse(
         _generate(),

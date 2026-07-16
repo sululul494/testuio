@@ -55,7 +55,7 @@ class AutoDJManager:
         if not self._enabled:
             return None
         attempts = 0
-        max_attempts = 5
+        max_attempts = 15  # enough to skip past a run of bot-blocked videos
         while attempts < max_attempts:
             url = self._pick_next_url()
             if url is None:

@@ -37,11 +37,30 @@ Other non-secret vars are set in Replit env, including `ICECAST_HOST`, `ICECAST_
 
 - None yet — populate here as the user gives explicit guidance.
 
+## OAuth2 setup (required for YouTube playback from cloud IPs)
+
+YouTube blocks Replit/Railway datacenter IPs with a "Sign in to confirm you're not a bot" screen. Cookies alone do not bypass this. The only reliable fix is OAuth2 device-code authentication:
+
+1. Open the **Shell** tab and run:
+   ```bash
+   python3 setup_youtube_oauth.py
+   ```
+2. Visit the URL it prints and enter the device code.
+3. Once approved, copy the printed `YOUTUBE_OAUTH2_TOKEN_B64` value.
+4. Add it as a **Replit Secret** (and a Railway variable) named `YOUTUBE_OAUTH2_TOKEN_B64`.
+5. Restart the `Start application` workflow.
+
+The token is refreshable, so the one-time setup keeps working. `YOUTUBE_COOKIES_B64` is ignored when OAuth2 is configured.
+
+## iOS / Safari stream
+
+iOS AVFoundation cannot use the Icecast ICY protocol on port 8000. A `/stream` proxy endpoint is available on the FastAPI port (5000) that re-serves the MP3 bytes over plain HTTP with standard headers. Use that URL for mobile listeners.
+
 ## Gotchas
 
 - Icecast XML and the FastAPI backend both expect the same `ICECAST_PASSWORD`. If you change one, change the other and restart the workflow.
 - The iOS-friendly stream mount was added to `icecast-replit.xml` with a larger `burst-size` and `client-timeout` to reduce rebuffering on mobile networks.
-- YouTube cookies can be supplied via the `YOUTUBE_COOKIES_B64` env var if extractions fail on cloud IPs.
+- YouTube cookies can be supplied via the `YOUTUBE_COOKIES_B64` env var, but they are ignored when `YOUTUBE_OAUTH2_TOKEN_B64` is present because OAuth2 is the only reliable method from cloud IPs.
 
 ## Pointers
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import os
 import random
 import re
@@ -52,6 +53,37 @@ def _write_cookies() -> None:
 
 # Write cookies once at module load so all yt-dlp instances use them.
 _write_cookies()
+
+OAUTH2_TOKEN_CACHE_FILE = os.path.expanduser("~/.cache/yt-dlp/youtube-oauth2/token_data.json")
+
+
+def _write_oauth2_token() -> None:
+    """Decode a base64-encoded OAuth2 token from env and prime the yt-dlp cache.
+
+    The yt-dlp-youtube-oauth2 plugin stores tokens in yt-dlp's cache. By
+    writing the env-provided token to the same location, the plugin can load it
+    automatically and refresh the access token as needed without prompting for a
+    device code on every startup.
+    """
+    raw_b64: str | None = settings.youtube_oauth2_token_b64
+    if not raw_b64:
+        return
+    try:
+        token_data = json.loads(base64.b64decode(raw_b64).decode("utf-8"))
+        required = ("access_token", "expires", "refresh_token", "token_type")
+        if not all(k in token_data for k in required):
+            logger.warning("YOUTUBE_OAUTH2_TOKEN_B64 is missing required keys; ignoring")
+            return
+        # Store in the plugin's cache location so it is loaded automatically.
+        with yt_dlp.YoutubeDL({"quiet": True, "cachedir": os.path.expanduser("~/.cache/yt-dlp")}) as ydl:
+            ydl.cache.store("youtube-oauth2", "token_data", token_data)
+        logger.info("YouTube OAuth2 token loaded from environment into yt-dlp cache")
+    except Exception as exc:
+        logger.error(f"Failed to load YouTube OAuth2 token: {exc}")
+
+
+# Prime the OAuth2 token cache at module load so extractions can use it.
+_write_oauth2_token()
 
 PRIVATE_ERRORS = (
     "private video",
@@ -147,14 +179,27 @@ class YouTubeExtractor:
             },
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["android", "web"],
+                    # tv_embedded is treated as an embedded player — much less
+                    # aggressive bot-detection from cloud IPs than android/web.
+                    "player_client": ["tv_embedded", "ios", "android"],
                     "skip": ["hls", "dash"],
                 }
             },
         }
-        if os.path.exists(COOKIES_PATH):
-            self._base_opts["cookies"] = COOKIES_PATH
-            logger.info("Using YouTube cookies from %s", COOKIES_PATH)
+        oauth2_token_present = bool(settings.youtube_oauth2_token_b64) or os.path.exists(OAUTH2_TOKEN_CACHE_FILE)
+        if oauth2_token_present:
+            # OAuth2 is the only auth method that reliably bypasses YouTube's
+            # cloud-IP bot checks. It manages its own Authorization header, so
+            # do not pass cookies at the same time.
+            self._base_opts["username"] = "oauth2"
+            self._base_opts["password"] = ""
+            # Authenticated web client gives the richest format selection.
+            self._base_opts["extractor_args"]["youtube"]["player_client"] = ["web", "ios", "android"]
+            logger.info("Using YouTube OAuth2 authentication")
+        else:
+            if os.path.exists(COOKIES_PATH):
+                self._base_opts["cookies"] = COOKIES_PATH
+                logger.info("Using YouTube cookies from %s", COOKIES_PATH)
 
         if settings.proxy_url:
             self._base_opts["proxy"] = settings.proxy_url
@@ -180,17 +225,17 @@ class YouTubeExtractor:
         except yt_dlp.utils.DownloadError as exc:
             msg = str(exc).lower()
             logger.warning(f"yt-dlp DownloadError for {url!r}: {msg[:200]}")
-            is_bot_block = any(k in msg for k in ("sign in", "bot", "confirm you're not a bot", "429", "too many requests"))
-            if is_bot_block:
-                # Try Invidious FIRST, before setting the cooldown.
-                # If it works we avoid the silence gap entirely.
-                track = self._invidious_fallback(url, requested_by)
-                if track:
-                    _clear_youtube_cooldown()
-                    return track
-                # Invidious also failed — now apply exponential backoff.
+            is_true_rate_limit = any(k in msg for k in ("429", "too many requests"))
+            is_bot_block = any(k in msg for k in ("sign in", "bot", "confirm you're not a bot"))
+            if is_true_rate_limit:
+                # HTTP 429 = server-side IP rate limit; apply global cooldown.
                 _maybe_apply_youtube_backoff(msg)
-                raise RateLimitError(f"YouTube rate-limit/bot block for {url!r}")
+                raise RateLimitError(f"YouTube HTTP 429 rate-limit for {url!r}")
+            if is_bot_block:
+                # Bot-check on this specific video. Skip it and let AutoDJ
+                # move on to the next URL — no global cooldown needed.
+                logger.warning(f"Bot-check for {url!r}; skipping this video")
+                raise SkippableError(f"Bot-check blocked {url!r}")
             self._raise_for_message(msg, url)
             raise ExtractionError(f"yt-dlp error for {url!r}: {exc}") from exc
         except Exception as exc:
