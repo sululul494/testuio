@@ -19,6 +19,9 @@ import os
 import sys
 
 import yt_dlp
+from app.youtube.oauth_patch import _apply_youtube_oauth_patch
+
+_apply_youtube_oauth_patch()
 
 OAUTH2_TOKEN_CACHE_FILE = os.path.expanduser("~/.cache/yt-dlp/youtube-oauth2/token_data.json")
 

@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 import yt_dlp
+from app.youtube.oauth_patch import _apply_youtube_oauth_patch
 
 from app.config.settings import settings
 from app.logger.setup import get_logger
@@ -53,6 +54,9 @@ def _write_cookies() -> None:
 
 # Write cookies once at module load so all yt-dlp instances use them.
 _write_cookies()
+
+# Apply the runtime patch to the yt-dlp-youtube-oauth2 plugin before it is used.
+_apply_youtube_oauth_patch()
 
 OAUTH2_TOKEN_CACHE_FILE = os.path.expanduser("~/.cache/yt-dlp/youtube-oauth2/token_data.json")
 

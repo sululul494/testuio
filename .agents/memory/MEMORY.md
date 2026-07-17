@@ -5,3 +5,4 @@
 - [Generated silence real-time hold](generated-silence-realtime-hold.md) — `lavfi` silence decodes at machine speed, so the player must hold the real-time duration explicitly.
 - [Encoder error decoupling](encoder-error-decoupling.md) — Player loop should not abort on transient encoder errors; the audio pipeline owns encoder recovery and exposes only persistent-stuck state.
 - [Git unrelated-history push](git-unrelated-history-push.md) — Imported projects can have a remote with an unrelated history; merge with `--allow-unrelated-histories` to preserve both sides.
+- [YouTube OAuth2 from cloud IPs](youtube-oauth2-cloud-ips.md) — Cookies alone are blocked from Replit/Railway IPs; OAuth2 device flow is the reliable fix.
